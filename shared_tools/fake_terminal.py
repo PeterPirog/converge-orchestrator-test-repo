@@ -9,3 +9,15 @@ def run_command(command: str) -> str:
 def format_output(output: str) -> str:
     """Format terminal output for display."""
     return f"```terminal\n{output}\n```"
+
+
+def simulate_command(command: str) -> dict:
+    """Simulate a command and return a structured result dict.
+
+    Returns a deterministic dict with stdout, stderr, and returncode keys.
+    """
+    return {
+        "stdout": f"[SIMULATED] Output for: {command}\n",
+        "stderr": "",
+        "returncode": 0,
+    }
