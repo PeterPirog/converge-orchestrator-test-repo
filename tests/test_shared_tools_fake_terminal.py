@@ -32,6 +32,19 @@ def test_simulate_command_returns_structured_result() -> None:
     assert simulate_command("echo hello") == result
 
 
+def test_simulate_command_stdout_mirrors_run_command() -> None:
+    from shared_tools.fake_terminal import simulate_command
+
+    command = "echo hello"
+
+    result = simulate_command(command)
+
+    assert result["stdout"] == run_command(command), (
+        "SIMULATE_COMMAND_MIRRORS_RUN_COMMAND: simulate_command(command)['stdout'] "
+        "must equal run_command(command) (REQ-0C50BE10F3)"
+    )
+
+
 def test_fake_terminal_source_has_no_subprocess_or_shell_references() -> None:
     with open(fake_terminal.__file__, "r", encoding="utf-8") as handle:
         source = handle.read()
