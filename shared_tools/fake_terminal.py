@@ -15,9 +15,11 @@ def simulate_command(command: str) -> dict:
     """Simulate a command and return a structured result dict.
 
     Returns a deterministic dict with stdout, stderr, and returncode keys.
+    stdout mirrors run_command(command) so the structured API preserves the
+    legacy output semantics.
     """
     return {
-        "stdout": f"[SIMULATED] Output for: {command}\n",
+        "stdout": run_command(command),
         "stderr": "",
         "returncode": 0,
     }
