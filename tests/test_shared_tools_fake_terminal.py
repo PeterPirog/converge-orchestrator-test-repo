@@ -121,3 +121,51 @@ def test_redact_secrets_redacts_non_empty_supplied_secrets() -> None:
     assert redact_secrets(text, [""]) == text, (
         "REDACT_SECRETS: empty secret values must be ignored (REQ-85C52948B7)"
     )
+
+
+def test_redact_secrets_redacts_each_repeated_occurrence_with_exact_literal() -> None:
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-A59E470230)"
+        ) from exc
+
+    secrets = ["hunter2", "sk-live-abc123", ""]
+    text = (
+        "first pass hunter2 then sk-live-abc123 again; "
+        "second pass hunter2 and sk-live-abc123 once more; "
+        "third pass hunter2 sk-live-abc123"
+    )
+
+    result = redact_secrets(text, secrets)
+
+    assert text.count("hunter2") == 3
+    assert text.count("sk-live-abc123") == 3
+    assert "hunter2" not in result, (
+        "REDACT_SECRETS: every repeated occurrence of a supplied secret "
+        "must be redacted (REQ-A59E470230)"
+    )
+    assert "sk-live-abc123" not in result, (
+        "REDACT_SECRETS: every repeated occurrence of a supplied secret "
+        "must be redacted (REQ-A59E470230)"
+    )
+    assert result == (
+        "first pass [REDACTED] then [REDACTED] again; "
+        "second pass [REDACTED] and [REDACTED] once more; "
+        "third pass [REDACTED] [REDACTED]"
+    ), (
+        "REDACT_SECRETS: each repeated occurrence must be replaced with the "
+        "exact literal [REDACTED] (REQ-A59E470230)"
+    )
+    assert result.count("[REDACTED]") == 6, (
+        "REDACT_SECRETS: one exact [REDACTED] literal must replace each of "
+        "the six occurrences, and the empty secret value must be ignored "
+        "(REQ-A59E470230)"
+    )
+    assert redact_secrets(text, secrets) == result, (
+        "REDACT_SECRETS: repeated-occurrence redaction must be deterministic "
+        "(REQ-A59E470230)"
+    )
