@@ -84,3 +84,40 @@ def test_simulate_command_treats_command_text_as_data() -> None:
         "COMMAND_TEXT_AS_DATA: a bare DATA_MARKER_42 line would prove the "
         "command was executed as a shell command (REQ-413A5B74FD)"
     )
+
+
+def test_redact_secrets_redacts_non_empty_supplied_secrets() -> None:
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-85C52948B7)"
+        ) from exc
+
+    secrets = ["hunter2", "sk-live-abc123"]
+    text = (
+        "training log line with api key sk-live-abc123 and password hunter2 here"
+    )
+
+    result = redact_secrets(text, secrets)
+
+    assert "sk-live-abc123" not in result, (
+        "REDACT_SECRETS: non-empty supplied secret values occurring in text "
+        "must be redacted (REQ-85C52948B7)"
+    )
+    assert "hunter2" not in result, (
+        "REDACT_SECRETS: non-empty supplied secret values occurring in text "
+        "must be redacted (REQ-85C52948B7)"
+    )
+    assert result == redact_secrets(text, secrets), (
+        "REDACT_SECRETS: redaction must be deterministic (REQ-85C52948B7)"
+    )
+    assert redact_secrets(text, ["value-not-in-text"]) == text, (
+        "REDACT_SECRETS: text without any supplied secret must be unchanged "
+        "(REQ-85C52948B7)"
+    )
+    assert redact_secrets(text, [""]) == text, (
+        "REDACT_SECRETS: empty secret values must be ignored (REQ-85C52948B7)"
+    )
