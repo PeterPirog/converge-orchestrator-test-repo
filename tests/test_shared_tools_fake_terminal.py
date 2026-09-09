@@ -63,3 +63,24 @@ def test_fake_terminal_source_has_no_subprocess_or_shell_references() -> None:
         "fake_terminal must remain a simulator and must not invoke "
         f"subprocess or a shell (REQ-879DB2129D); found: {offenders}"
     )
+
+
+def test_simulate_command_treats_command_text_as_data() -> None:
+    from shared_tools.fake_terminal import simulate_command
+
+    command = "echo DATA_MARKER_42"
+
+    result = simulate_command(command)
+
+    assert set(result) == {"stdout", "stderr", "returncode"}, (
+        "COMMAND_TEXT_AS_DATA: simulate_command must return the structured "
+        "result dict (REQ-413A5B74FD)"
+    )
+    assert command in result["stdout"], (
+        "COMMAND_TEXT_AS_DATA: the command text must be embedded verbatim "
+        "in stdout rather than executed (REQ-413A5B74FD)"
+    )
+    assert "DATA_MARKER_42" not in result["stdout"].splitlines(), (
+        "COMMAND_TEXT_AS_DATA: a bare DATA_MARKER_42 line would prove the "
+        "command was executed as a shell command (REQ-413A5B74FD)"
+    )
