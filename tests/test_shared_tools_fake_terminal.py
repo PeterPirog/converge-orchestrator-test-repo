@@ -85,6 +85,80 @@ def test_fake_terminal_source_has_no_subprocess_or_shell_references() -> None:
     )
 
 
+def test_run_command_output_is_inert_simulated_data_at_runtime(
+    monkeypatch, tmp_path
+) -> None:
+    """Runtime complement to the static source-pattern check above.
+
+    REQ-879DB2129D: run_command must remain a simulator. The real
+    subprocess/shell entry points are armed so that any attempt to reach
+    them fails with the expected violation pattern, and the returned text
+    is proven to be inert simulated data: the command is embedded verbatim,
+    labeled simulated, produces no bare command output, and leaves no
+    filesystem side effects.
+    """
+    import os
+    import subprocess
+
+    def subsystem_violation(*_args, **_kwargs):
+        raise AssertionError(
+            "FAKE_TERMINAL_RUNTIME_SUBSYSTEM_VIOLATION: run_command reached "
+            "a real subprocess/shell entry point; it must remain an inert "
+            "simulator (REQ-879DB2129D)"
+        )
+
+    for entry_point in (
+        "Popen",
+        "run",
+        "call",
+        "check_call",
+        "check_output",
+        "getoutput",
+        "getstatusoutput",
+    ):
+        monkeypatch.setattr(subprocess, entry_point, subsystem_violation)
+    monkeypatch.setattr(os, "system", subsystem_violation)
+    monkeypatch.setattr(os, "popen", subsystem_violation)
+    for entry_point in ("execv", "execve", "execvp", "execvpe"):
+        monkeypatch.setattr(os, entry_point, subsystem_violation)
+
+    marker = "RUNTIME_INERT_PROOF_9F2E"
+    side_effect_path = tmp_path / "runtime_execution_proof.txt"
+    command = (
+        f"echo {marker} && touch {side_effect_path} && "
+        f"python3 -c \"open(r'{side_effect_path}', 'w').write('{marker}')\""
+    )
+
+    result = run_command(command)
+
+    assert isinstance(result, str), (
+        "FAKE_TERMINAL_RUNTIME_SUBSYSTEM_VIOLATION: run_command must return "
+        "inert simulated text (REQ-879DB2129D)"
+    )
+    assert command in result, (
+        "FAKE_TERMINAL_RUNTIME_SUBSYSTEM_VIOLATION: the command text must be "
+        "present verbatim as inert data in the output rather than executed "
+        "(REQ-879DB2129D)"
+    )
+    assert "[SIMULATED]" in result, (
+        "FAKE_TERMINAL_RUNTIME_SUBSYSTEM_VIOLATION: the output must be "
+        "labeled as simulated data (REQ-879DB2129D)"
+    )
+    assert marker not in result.splitlines(), (
+        "FAKE_TERMINAL_RUNTIME_SUBSYSTEM_VIOLATION: a bare marker line in "
+        "the output would prove the command was executed by a shell "
+        "(REQ-879DB2129D)"
+    )
+    assert not side_effect_path.exists(), (
+        "FAKE_TERMINAL_RUNTIME_SUBSYSTEM_VIOLATION: a filesystem side effect "
+        "would prove real command execution (REQ-879DB2129D)"
+    )
+    assert run_command(command) == result, (
+        "FAKE_TERMINAL_RUNTIME_SUBSYSTEM_VIOLATION: the simulated output "
+        "must be deterministic (REQ-879DB2129D)"
+    )
+
+
 def test_simulate_command_treats_command_text_as_data() -> None:
     from shared_tools.fake_terminal import simulate_command
 
