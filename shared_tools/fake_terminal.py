@@ -74,16 +74,24 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     occurrence, is replaced by the exact literal ``[REDACTED]``, and empty
     secret values are ignored.
 
-    Pure and deterministic: the result depends only on its arguments and no
-    state is read or written. Empty secret values are ignored, duplicates
-    collapse to a single value, and text containing no supplied secret is
-    returned unchanged. Each occurrence is replaced by the exact literal
-    ``[REDACTED]``; when supplied secrets overlap, the longest match wins so
-    no supplied secret value survives redaction.
+    ACCEPT-002 / REQ-CF0D222BF0 (deterministic redaction contract): the
+    result is a pure function of its two arguments; no state is read or
+    written. Overlapping inputs must produce deterministic output
+    independent of set/hash iteration order: before matching, the non-empty
+    supplied secret values are canonicalized into a total order (longest
+    first, lexicographic tie-break), so the redacted text is identical
+    whatever iterable form the secrets arrive in, in whatever order, and
+    under whatever string hashing. When supplied secrets overlap, the
+    longest match wins, so no supplied secret value survives redaction.
+    Empty secret values are ignored, duplicates collapse to a single value,
+    and text containing no supplied secret is returned unchanged. Each
+    occurrence is replaced by the exact literal ``[REDACTED]``.
     """
-    # Canonical total order (longest first, lexicographic tie-break) keeps
-    # the alternation order deterministic even for same-length secrets,
-    # whose order would otherwise depend on set iteration order.
+    # REQ-CF0D222BF0: canonical total order (longest first, lexicographic
+    # tie-break) makes the regex alternation, and hence the redacted output,
+    # independent of the order the caller supplies the secrets in and of
+    # set/hash iteration order; for overlapping secrets the longest match
+    # wins.
     values = sorted(
         {secret for secret in secrets if secret},
         key=lambda value: (-len(value), value),
