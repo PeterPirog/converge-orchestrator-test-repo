@@ -70,28 +70,39 @@ def simulate_command(command: str) -> dict:
 def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     """Redact every non-empty supplied secret value that occurs in text.
 
+    This is a pure function: its output depends only on ``text`` and ``secrets``,
+    and it performs no I/O of any kind.
+
     ACCEPT-002 / REQ-A59E470230: every occurrence, including every repeated
     occurrence, is replaced by the exact literal ``[REDACTED]``, and empty
     secret values are ignored.
 
-    ACCEPT-002 / REQ-CF0D222BF0 (deterministic redaction contract): the
-    result is a pure function of its two arguments; no state is read or
-    written. Overlapping inputs must produce deterministic output
-    independent of set/hash iteration order: before matching, the non-empty
-    supplied secret values are canonicalized into a total order (longest
-    first, lexicographic tie-break), so the redacted text is identical
-    whatever iterable form the secrets arrive in, in whatever order, and
-    under whatever string hashing. When supplied secrets overlap, the
-    longest match wins, so no supplied secret value survives redaction.
-    Empty secret values are ignored, duplicates collapse to a single value,
-    and text containing no supplied secret is returned unchanged. Each
-    occurrence is replaced by the exact literal ``[REDACTED]``.
+    No-I/O purity contract (REQ-0320AB815A / ACCEPT-002): the result is a
+    pure function of its two arguments, ``text`` and ``secrets``. The body
+    reads no environment variables, no files, no network resources, and no
+    process state; it performs no I/O of any kind and mutates no global or
+    module-level state, so the redacted text depends only on ``text`` and
+    ``secrets``.
+
+    Determinism contract (REQ-CF0D222BF0 / ACCEPT-002): before matching,
+    the non-empty supplied secret values are canonicalized into a total
+    order (longest first, lexicographic tie-break), so the redacted text is
+    identical whatever iterable form the secrets arrive in, in whatever
+    order, and under whatever string hashing. When supplied secrets
+    overlap, the longest match wins, so no supplied secret value survives
+    redaction. Empty secret values are ignored, duplicates collapse to a
+    single value, and text containing no supplied secret is returned
+    unchanged.
     """
-    # REQ-CF0D222BF0: canonical total order (longest first, lexicographic
-    # tie-break) makes the regex alternation, and hence the redacted output,
-    # independent of the order the caller supplies the secrets in and of
-    # set/hash iteration order; for overlapping secrets the longest match
-    # wins.
+    # REQ-0320AB815A (no-I/O): the entire implementation below performs no I/O
+    # and reads no environment variables, files, network resources, or process
+    # state. The only helpers called are the pure ``re`` functions
+    # re.escape, re.compile, and re.Pattern.sub. No globals, no mutables,
+    # no side effects.
+    # REQ-CF0D222BF0 (determinism): canonicalizing to longest-first / lexicographic
+    # order makes the alternation, and hence the output, independent of the order
+    # the secrets are supplied in and of set/hash iteration order; for overlapping
+    # secrets the longest match wins.
     values = sorted(
         {secret for secret in secrets if secret},
         key=lambda value: (-len(value), value),
