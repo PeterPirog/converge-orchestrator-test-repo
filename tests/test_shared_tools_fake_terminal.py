@@ -415,6 +415,64 @@ def test_redact_secrets_collapses_duplicates_and_ignores_input_order() -> None:
     )
 
 
+def test_redact_secrets_redacts_every_boundary_occurrence_for_any_iterable() -> None:
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-85C52948B7)"
+        ) from exc
+
+    # REQ-85C52948B7: EVERY non-empty supplied secret value occurring in
+    # text must be redacted, including occurrences at the very start and
+    # end of the text, and the helper must treat secret values as exact
+    # literals regardless of the iterable they are supplied in (here a set,
+    # and a second call uses a generator).
+    secret_head = "AKIA-super-secret"
+    secret_tail = "tail.secret-key"
+    text = (
+        f"{secret_head} opens the log, mid body, {secret_tail} closes it, "
+        f"{secret_tail} again and {secret_head} last"
+    )
+
+    result = redact_secrets(text, {secret_head, secret_tail, ""})
+
+    assert secret_head not in result, (
+        "REDACT_SECRETS: a non-empty supplied secret at the start of the "
+        "text must be redacted (REQ-85C52948B7)"
+    )
+    assert secret_tail not in result, (
+        "REDACT_SECRETS: a non-empty supplied secret (with a regex-special "
+        "dot) at the end of the text must be redacted (REQ-85C52948B7)"
+    )
+    assert result == (
+        "[REDACTED] opens the log, mid body, [REDACTED] closes it, "
+        "[REDACTED] again and [REDACTED] last"
+    ), (
+        "REDACT_SECRETS: every occurrence of a supplied secret, wherever it "
+        "appears including text boundaries, must become the exact [REDACTED] "
+        "literal (REQ-85C52948B7)"
+    )
+    assert result.count("[REDACTED]") == 4, (
+        "REDACT_SECRETS: each of the four boundary/repeated occurrences "
+        "must be redacted exactly once (REQ-85C52948B7)"
+    )
+    assert redact_secrets(text, (v for v in (secret_head, secret_tail))) == result, (
+        "REDACT_SECRETS: redaction must be identical for any iterable of "
+        "secret values, not just a list (REQ-85C52948B7)"
+    )
+    assert redact_secrets("", [secret_head, secret_tail]) == "", (
+        "REDACT_SECRETS: empty text must be returned unchanged "
+        "(REQ-85C52948B7)"
+    )
+    assert redact_secrets(text, {secret_head, secret_tail, ""}) == result, (
+        "REDACT_SECRETS: boundary-occurrence redaction must be deterministic "
+        "(REQ-85C52948B7)"
+    )
+
+
 def test_add_output_concatenates_two_output_strings_additively() -> None:
     try:
         from shared_tools.fake_terminal import add_output
