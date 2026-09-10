@@ -45,9 +45,12 @@ def format_output(output: str) -> str:
 def simulate_command(command: str) -> dict:
     """Simulate a command and return a structured result dict.
 
-    Returns a deterministic dict with stdout, stderr, and returncode keys.
-    stdout mirrors run_command(command) so the structured API preserves the
-    run_command output semantics.
+    ACCEPT-001 / REQ-0C50BE10F3: structured command simulation that
+    preserves the existing run_command behavior. Returns a deterministic
+    dict with stdout, stderr, and returncode keys. stdout mirrors
+    run_command(command) exactly for every command string, including the
+    legacy-pinned 'echo SHOULD_NOT_RUN' input, so the structured API
+    preserves the run_command output semantics.
     """
     return {
         "stdout": run_command(command),
