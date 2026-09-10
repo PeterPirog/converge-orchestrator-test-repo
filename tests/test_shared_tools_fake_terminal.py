@@ -434,6 +434,84 @@ def test_redact_secrets_prefers_longest_match_when_supplied_secrets_overlap() ->
     )
 
 
+def test_redact_secrets_overlapping_inputs_are_deterministic_independent_of_set_and_hash_order() -> None:
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-CF0D222BF0)"
+        ) from exc
+
+    import itertools
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    # Overlapping supplied secrets: "token123" contains "token" which
+    # contains "tok". The canonical longest-first / lexicographic order must
+    # make the longest supplied secret win at every overlapping position,
+    # whatever order the values are supplied in.
+    secrets = ["tok", "token", "token123"]
+    text = "show token123 then token and tok done"
+    expected = "show [REDACTED] then [REDACTED] and [REDACTED] done"
+
+    for order in itertools.permutations(secrets):
+        result = redact_secrets(text, list(order))
+        assert result == expected, (
+            "REDACT_SECRETS: overlapping supplied secrets must redact to the "
+            "same deterministic result for every supplied order "
+            f"(REQ-CF0D222BF0); order={order!r} gave {result!r}"
+        )
+        assert "tok" not in result and "token" not in result and "token123" not in result, (
+            "REDACT_SECRETS: no supplied secret value may survive redaction "
+            "(REQ-CF0D222BF0)"
+        )
+
+    assert redact_secrets(text, set(secrets)) == expected, (
+        "REDACT_SECRETS: overlapping supplied secrets must redact to the "
+        "same deterministic result when supplied as an unordered set "
+        "(REQ-CF0D222BF0)"
+    )
+
+    # Cross-process determinism: the identical call must yield
+    # byte-identical output under different PYTHONHASHSEED values, so the
+    # overlapping-input result cannot depend on set/hash iteration order.
+    repo_root = Path(__file__).resolve().parent.parent
+    snippet = (
+        "import shared_tools.fake_terminal as ft\n"
+        f"text = {text!r}\n"
+        f"secrets = {set(secrets)!r}\n"
+        "print(ft.redact_secrets(text, secrets), end='')\n"
+    )
+    outputs = []
+    for seed in ("0", "1", "42"):
+        env = dict(os.environ, PYTHONPATH=str(repo_root), PYTHONHASHSEED=seed)
+        completed = subprocess.run(
+            [sys.executable, "-c", snippet],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root),
+            env=env,
+            timeout=60,
+        )
+        assert completed.returncode == 0, (
+            "REDACT_SECRETS: the deterministic overlapping-secret redaction "
+            "call must succeed in a fresh interpreter (REQ-CF0D222BF0); "
+            f"stderr: {completed.stderr!r}"
+        )
+        outputs.append(completed.stdout)
+
+    assert outputs == [expected, expected, expected], (
+        "REDACT_SECRETS: overlapping inputs must produce deterministic "
+        "output independent of set/hash iteration order, i.e. "
+        "byte-identical across Python hash seeds (REQ-CF0D222BF0); "
+        f"got {outputs!r}"
+    )
+
+
 def test_redact_secrets_treats_regex_special_characters_as_literal() -> None:
     try:
         from shared_tools.fake_terminal import redact_secrets
