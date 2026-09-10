@@ -82,7 +82,9 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
 def add_output(first: str, second: str) -> str:
     """Concatenate two output strings additively.
 
-    Pure and deterministic: returns first + second with both strings
-    present in order, neither dropped.
+    ACCEPT-001 / REQ-F92FFC55BA: additive structured command simulation.
+    Returns first + second with both strings present in order, neither
+    dropped. Pure and deterministic: the result depends only on its
+    arguments and no state is read or written.
     """
     return first + second
