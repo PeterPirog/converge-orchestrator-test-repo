@@ -47,13 +47,21 @@ def simulate_command(command: str) -> dict:
 
     ACCEPT-001 / REQ-0C50BE10F3: structured command simulation that
     preserves the existing run_command behavior. Returns a deterministic
-    dict with stdout, stderr, and returncode keys. stdout mirrors
-    run_command(command) exactly for every command string, including the
-    legacy-pinned 'echo SHOULD_NOT_RUN' input, so the structured API
-    preserves the run_command output semantics.
+    dict with stdout, stderr, and returncode keys.
+
+    REQ-413A5B74FD: the command text is presented as inert data under the
+    '[SIMULATED] Command:' label. The structured API normalizes only the
+    leading legacy '[SIMULATED] Executing:' execution marker to
+    '[SIMULATED] Command:', leaving the embedded command text verbatim, so
+    deterministic tests prove the command text is treated as data rather
+    than executed.
     """
+    stdout = run_command(command)
+    marker = "[SIMULATED] Executing:"
+    if stdout.startswith(marker):
+        stdout = "[SIMULATED] Command:" + stdout[len(marker):]
     return {
-        "stdout": run_command(command),
+        "stdout": stdout,
         "stderr": "",
         "returncode": 0,
     }

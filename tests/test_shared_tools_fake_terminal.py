@@ -202,6 +202,36 @@ def test_simulate_command_presents_command_text_as_inert_data() -> None:
     )
 
 
+def test_simulate_command_legacy_pinned_input_is_inert_data() -> None:
+    from shared_tools.fake_terminal import simulate_command
+
+    command = "echo SHOULD_NOT_RUN"
+
+    result = simulate_command(command)
+
+    assert set(result) == {"stdout", "stderr", "returncode"}, (
+        "INERT_COMMAND_DATA: simulate_command must return the structured "
+        "result dict (REQ-413A5B74FD)"
+    )
+    assert command in result["stdout"], (
+        "INERT_COMMAND_DATA: the command text must be embedded verbatim in "
+        "stdout as inert data rather than executed (REQ-413A5B74FD)"
+    )
+    assert "SHOULD_NOT_RUN" not in result["stdout"].splitlines(), (
+        "INERT_COMMAND_DATA: a bare SHOULD_NOT_RUN line would prove the "
+        "command was executed as a shell command (REQ-413A5B74FD)"
+    )
+    assert result["stderr"] == "" and result["returncode"] == 0, (
+        "INERT_COMMAND_DATA: the structured result must remain deterministic "
+        "inert data (REQ-413A5B74FD)"
+    )
+    assert "[SIMULATED] Executing:" not in result["stdout"], (
+        "INERT_COMMAND_DATA: simulate_command output must present the "
+        "command text as inert data and must not carry the "
+        "'[SIMULATED] Executing:' execution marker (REQ-413A5B74FD)"
+    )
+
+
 def test_redact_secrets_redacts_non_empty_supplied_secrets() -> None:
     try:
         from shared_tools.fake_terminal import redact_secrets
