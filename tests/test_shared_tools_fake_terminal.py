@@ -661,3 +661,35 @@ def test_add_output_concatenates_two_output_strings_additively() -> None:
     assert add_output(first, second) == result, (
         "ADDITIVE_OUTPUT: add_output must be deterministic (REQ-F92FFC55BA)"
     )
+
+
+def test_add_output_additive_identity_and_order_preserving() -> None:
+    """REQ-F92FFC55BA: additive output accumulation is a pure concatenation.
+
+    Reinforces the additive contract the acceptance objective calls out:
+    the two supplied strings are concatenated (first + second), neither is
+    dropped, and their relative order is preserved. The empty-string cases
+    confirm add_output acts as an identity on the accumulated side, so no
+    input is ever lost. Pure and deterministic: no state is read or written.
+    """
+    from shared_tools.fake_terminal import add_output
+
+    first = "[SIMULATED] Output A"
+    second = "[SIMULATED] Output B"
+
+    # Concatenation: the result is exactly first + second.
+    assert add_output(first, second) == first + second, (
+        "ADDITIVE_OUTPUT: add_output must return first + second "
+        "(REQ-F92FFC55BA)"
+    )
+
+    # Order preservation: first precedes second, each kept intact.
+    assert add_output(first, second).startswith(first)
+    assert add_output(first, second).endswith(second)
+    # Additive (order-sensitive): operand order is preserved, not swapped.
+    assert add_output(first, second) != add_output(second, first)
+
+    # Additive identity: empty operands contribute nothing; none lost.
+    assert add_output(first, "") == first
+    assert add_output("", second) == second
+    assert add_output("", "") == ""
