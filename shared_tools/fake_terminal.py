@@ -73,6 +73,13 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     This is a pure function: its output depends only on ``text`` and ``secrets``,
     and it performs no I/O of any kind.
 
+    Deterministic secret redaction helper (REQ-5C3F7AB352 / ACCEPT-002): this
+    is the deterministic secret redaction helper. Its return value never
+    contains a supplied secret value, so text logged through it does not leak
+    the input text's secrets. Every repeated occurrence is redacted and empty
+    secret values are ignored, the repeated-value and empty-value cases the
+    deterministic tests must cover.
+
     ACCEPT-002 / REQ-A59E470230: every occurrence, including every repeated
     occurrence, is replaced by the exact literal ``[REDACTED]``, and empty
     secret values are ignored.
