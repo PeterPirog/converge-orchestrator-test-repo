@@ -45,6 +45,26 @@ def test_simulate_command_stdout_mirrors_run_command() -> None:
     )
 
 
+def test_simulate_command_stdout_mirrors_run_command_for_varied_commands() -> None:
+    from shared_tools.fake_terminal import simulate_command
+
+    commands = [
+        "",
+        "   ",
+        "echo hello",
+        'echo "quoted arg" && ls -la | grep pattern',
+        "multi\nline\ncmd",
+        "unicode-\u00fcn\u00efc\u00f8d\u00e9",
+    ]
+
+    for command in commands:
+        assert simulate_command(command)["stdout"] == run_command(command), (
+            "SIMULATE_COMMAND_MIRRORS_RUN_COMMAND: "
+            "simulate_command(command)['stdout'] must equal run_command(command) "
+            "for every command (REQ-0C50BE10F3)"
+        )
+
+
 def test_fake_terminal_source_has_no_subprocess_or_shell_references() -> None:
     with open(fake_terminal.__file__, "r", encoding="utf-8") as handle:
         source = handle.read()
