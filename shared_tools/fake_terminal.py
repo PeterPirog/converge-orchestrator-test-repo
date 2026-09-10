@@ -5,7 +5,12 @@ from collections.abc import Iterable
 
 
 def run_command(command: str) -> str:
-    """Simulate running a command and return deterministic output."""
+    """Simulate running a command and return deterministic output.
+
+    ACCEPT-001 / REQ-879DB2129D: this remains a simulator. The command
+    string is inert data; no external process is spawned, no system()
+    call is made via the os module, and no shell is ever invoked.
+    """
     return f"[SIMULATED] Executing: {command}\n[SIMULATED] Output placeholder"
 
 
