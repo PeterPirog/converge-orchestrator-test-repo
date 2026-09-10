@@ -40,3 +40,12 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
         return text
     pattern = re.compile("|".join(re.escape(value) for value in values))
     return pattern.sub("[REDACTED]", text)
+
+
+def add_output(first: str, second: str) -> str:
+    """Concatenate two output strings additively.
+
+    Pure and deterministic: returns first + second with both strings
+    present in order, neither dropped.
+    """
+    return first + second

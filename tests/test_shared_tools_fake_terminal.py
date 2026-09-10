@@ -169,3 +169,31 @@ def test_redact_secrets_redacts_each_repeated_occurrence_with_exact_literal() ->
         "REDACT_SECRETS: repeated-occurrence redaction must be deterministic "
         "(REQ-A59E470230)"
     )
+
+
+def test_add_output_concatenates_two_output_strings_additively() -> None:
+    try:
+        from shared_tools.fake_terminal import add_output
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_ADDITIVE_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide an additive add_output helper that concatenates "
+            "two output strings (REQ-F92FFC55BA)"
+        ) from exc
+
+    first = "[SIMULATED] Executing: cmd A\n[SIMULATED] Output A"
+    second = "[SIMULATED] Executing: cmd B\n[SIMULATED] Output B"
+
+    result = add_output(first, second)
+
+    assert result == first + second, (
+        "ADDITIVE_OUTPUT: add_output must concatenate the two supplied "
+        "output strings additively (REQ-F92FFC55BA)"
+    )
+    assert first in result and second in result, (
+        "ADDITIVE_OUTPUT: both supplied output strings must be present in "
+        "order, with neither dropped (REQ-F92FFC55BA)"
+    )
+    assert add_output(first, second) == result, (
+        "ADDITIVE_OUTPUT: add_output must be deterministic (REQ-F92FFC55BA)"
+    )
