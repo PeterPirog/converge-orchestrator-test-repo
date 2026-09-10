@@ -213,6 +213,104 @@ def test_redact_secrets_redacts_each_repeated_occurrence_with_exact_literal() ->
     )
 
 
+def test_redact_secrets_prefers_longest_match_when_supplied_secrets_overlap() -> None:
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-85C52948B7)"
+        ) from exc
+
+    secrets = ["ab", "abc", "abcd"]
+    text = "token abcd then abc and ab end"
+
+    result = redact_secrets(text, secrets)
+
+    assert "abcd" not in result, (
+        "REDACT_SECRETS: the longest supplied secret must be redacted when "
+        "it overlaps a shorter one (REQ-85C52948B7)"
+    )
+    assert "abc" not in result, (
+        "REDACT_SECRETS: no supplied secret value may survive redaction of an "
+        "overlapping longer secret (REQ-85C52948B7)"
+    )
+    assert result == "token [REDACTED] then [REDACTED] and [REDACTED] end", (
+        "REDACT_SECRETS: each overlapping occurrence must collapse to exactly "
+        "one [REDACTED] literal (REQ-85C52948B7)"
+    )
+    assert result == redact_secrets(text, secrets), (
+        "REDACT_SECRETS: overlapping-secret redaction must be deterministic "
+        "(REQ-85C52948B7)"
+    )
+
+
+def test_redact_secrets_treats_regex_special_characters_as_literal() -> None:
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-85C52948B7)"
+        ) from exc
+
+    secrets = ["a.b", "c+d"]
+    text = (
+        "decoy axb stays and cx d stays, "
+        "real a.b goes and real c+d goes"
+    )
+
+    result = redact_secrets(text, secrets)
+
+    assert "a.b" not in result, (
+        "REDACT_SECRETS: a supplied secret containing regex special "
+        "characters must be redacted (REQ-85C52948B7)"
+    )
+    assert "c+d" not in result, (
+        "REDACT_SECRETS: a supplied secret containing regex special "
+        "characters must be redacted (REQ-85C52948B7)"
+    )
+    assert "axb" in result and "cx d" in result, (
+        "REDACT_SECRETS: secrets must match as exact literals, so lookalike "
+        "text that does not equal a supplied secret stays (REQ-85C52948B7)"
+    )
+    assert result == (
+        "decoy axb stays and cx d stays, "
+        "real [REDACTED] goes and real [REDACTED] goes"
+    ), (
+        "REDACT_SECRETS: literal [REDACTED] must replace only exact secret "
+        "occurrences (REQ-85C52948B7)"
+    )
+
+
+def test_redact_secrets_collapses_duplicates_and_ignores_input_order() -> None:
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-85C52948B7)"
+        ) from exc
+
+    text = "token-1 and token-2 and token-1"
+
+    result_a = redact_secrets(text, ["token-1", "token-2", "token-1", ""])
+    result_b = redact_secrets(text, ["token-2", "token-1", "token-1"])
+
+    assert result_a == "[REDACTED] and [REDACTED] and [REDACTED]", (
+        "REDACT_SECRETS: duplicated and empty secret values must not change "
+        "the redacted output (REQ-85C52948B7)"
+    )
+    assert result_a == result_b, (
+        "REDACT_SECRETS: redaction of same-length secrets must be "
+        "independent of the order in which they are supplied "
+        "(REQ-85C52948B7)"
+    )
+
+
 def test_add_output_concatenates_two_output_strings_additively() -> None:
     try:
         from shared_tools.fake_terminal import add_output

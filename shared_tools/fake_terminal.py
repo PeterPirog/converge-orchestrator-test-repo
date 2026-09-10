@@ -60,10 +60,19 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     """Redact every non-empty supplied secret value that occurs in text.
 
     Pure and deterministic: the result depends only on its arguments and no
-    state is read or written. Empty secret values are ignored, and text
-    containing no supplied secret is returned unchanged.
+    state is read or written. Empty secret values are ignored, duplicates
+    collapse to a single value, and text containing no supplied secret is
+    returned unchanged. Each occurrence is replaced by the exact literal
+    ``[REDACTED]``; when supplied secrets overlap, the longest match wins so
+    no supplied secret value survives redaction.
     """
-    values = sorted({secret for secret in secrets if secret}, key=len, reverse=True)
+    # Canonical total order (longest first, lexicographic tie-break) keeps
+    # the alternation order deterministic even for same-length secrets,
+    # whose order would otherwise depend on set iteration order.
+    values = sorted(
+        {secret for secret in secrets if secret},
+        key=lambda value: (-len(value), value),
+    )
     if not values:
         return text
     pattern = re.compile("|".join(re.escape(value) for value in values))
