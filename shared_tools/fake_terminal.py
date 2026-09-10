@@ -70,6 +70,10 @@ def simulate_command(command: str) -> dict:
 def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     """Redact every non-empty supplied secret value that occurs in text.
 
+    ACCEPT-002 / REQ-A59E470230: every occurrence, including every repeated
+    occurrence, is replaced by the exact literal ``[REDACTED]``, and empty
+    secret values are ignored.
+
     Pure and deterministic: the result depends only on its arguments and no
     state is read or written. Empty secret values are ignored, duplicates
     collapse to a single value, and text containing no supplied secret is

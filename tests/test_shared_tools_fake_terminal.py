@@ -317,6 +317,90 @@ def test_redact_secrets_redacts_each_repeated_occurrence_with_exact_literal() ->
     )
 
 
+def test_redact_secrets_normalization_is_stable_across_forms_orders_and_hash_seeds() -> None:
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-A59E470230)"
+        ) from exc
+
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    secret_key = "sk-live-abc123"
+    secret_pw = "hunter2"
+    text = (
+        f"{secret_pw} opens, {secret_key} middle, {secret_pw} again, "
+        f"{secret_key} closes, {secret_pw}"
+    )
+    expected = (
+        "[REDACTED] opens, [REDACTED] middle, [REDACTED] again, "
+        "[REDACTED] closes, [REDACTED]"
+    )
+
+    # The same logical secret set supplied as different containers, in
+    # different orders, with duplicates and empty values mixed in: the
+    # helper must normalize them to one identical result in which every
+    # repeated occurrence becomes the exact [REDACTED] literal.
+    forms = [
+        [secret_key, secret_pw, secret_key, "", secret_pw],
+        [secret_pw, secret_key],
+        [secret_pw, "", secret_key, secret_pw],
+        {secret_key, secret_pw, ""},
+        (secret_pw, secret_key, secret_pw),
+    ]
+
+    for form in forms:
+        result = redact_secrets(text, form)
+        assert result == expected, (
+            "REDACT_SECRETS: every repeated occurrence of a supplied secret "
+            "must be replaced with the exact literal [REDACTED] and empty "
+            "secret values must be ignored (REQ-A59E470230)"
+        )
+        assert secret_key not in result and secret_pw not in result, (
+            "REDACT_SECRETS: no supplied secret value may survive redaction "
+            "(REQ-A59E470230)"
+        )
+        assert result.count("[REDACTED]") == 5, (
+            "REDACT_SECRETS: exactly one [REDACTED] literal must replace "
+            "each of the five occurrences (REQ-A59E470230)"
+        )
+
+    # Cross-process determinism: identical calls under two different
+    # PYTHONHASHSEED values must yield byte-identical output, so the
+    # normalized result cannot depend on set/dict iteration order.
+    repo_root = Path(__file__).resolve().parent.parent
+    snippet = (
+        "import shared_tools.fake_terminal as ft\n"
+        f"text = {text!r}\n"
+        f"secrets = {forms[0]!r}\n"
+        "print(ft.redact_secrets(text, secrets), end='')\n"
+    )
+    for seed in ("1", "42"):
+        env = dict(os.environ, PYTHONPATH=str(repo_root), PYTHONHASHSEED=seed)
+        completed = subprocess.run(
+            [sys.executable, "-c", snippet],
+            capture_output=True,
+            text=True,
+            cwd=str(repo_root),
+            env=env,
+            timeout=60,
+        )
+        assert completed.returncode == 0, (
+            "REDACT_SECRETS: the deterministic redaction call must succeed "
+            f"in a fresh interpreter (REQ-A59E470230); stderr: {completed.stderr!r}"
+        )
+        assert completed.stdout == expected, (
+            "REDACT_SECRETS: redaction must be deterministic across Python "
+            "hash seeds, not only within one process (REQ-A59E470230)"
+        )
+
+
 def test_redact_secrets_prefers_longest_match_when_supplied_secrets_overlap() -> None:
     try:
         from shared_tools.fake_terminal import redact_secrets
