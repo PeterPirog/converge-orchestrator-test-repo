@@ -9,3 +9,16 @@ def run_command(command: str) -> str:
 def format_output(output: str) -> str:
     """Format terminal output for display."""
     return f"```terminal\n{output}\n```"
+
+
+def get_simulation_info() -> dict:
+    """Return deterministic metadata describing this fake terminal simulator.
+
+    Additive public API: reports that the module simulates (never executes)
+    commands and produces stable, deterministic output.
+    """
+    return {
+        "simulator": "fake_terminal",
+        "executes_commands": False,
+        "deterministic": True,
+    }
