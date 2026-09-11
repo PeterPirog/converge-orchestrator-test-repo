@@ -821,6 +821,80 @@ def test_redact_secrets_redacts_every_boundary_occurrence_for_any_iterable() -> 
     )
 
 
+def test_redact_secrets_treats_backslash_and_adjacent_occurrences_as_exact_literals() -> None:
+    """REQ-85C52948B7: literal matching holds for backslashes and adjacency.
+
+    Two required facets of the core contract -- "every non-empty supplied
+    secret value that occurs in ``text`` must be redacted" as exact literals,
+    deterministically, to the exact ``[REDACTED]`` marker -- are locked in:
+      * a secret value containing a backslash must match as an exact literal
+        (the backslash must not be re-interpreted as a regex escape), so a
+        lookalike decoy that differs from the secret is left untouched;
+      * adjacent, consecutive occurrences (no separating text) must each be
+        replaced by exactly one ``[REDACTED]`` literal.
+    """
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-85C52948B7)"
+        ) from exc
+
+    # Backslash secret: the value must be treated as an exact literal, so the
+    # occurrence is redacted while a lookalike that lacks the backslashes stays.
+    backslash_secret = "C:\\temp\\api\\token"
+    backslash_text = (
+        "path C:\\temp\\api\\token leaked; "
+        "decoy C:xtempxapixtoken stays"
+    )
+    backslash_result = redact_secrets(backslash_text, [backslash_secret])
+
+    assert backslash_secret not in backslash_result, (
+        "REDACT_SECRETS: a non-empty supplied secret containing a backslash "
+        "must be redacted (REQ-85C52948B7)"
+    )
+    assert "C:xtempxapixtoken" in backslash_result, (
+        "REDACT_SECRETS: a backslash in a supplied secret must match as an "
+        "exact literal, so a lookalike decoy that differs from the secret "
+        "must stay (REQ-85C52948B7)"
+    )
+    assert backslash_result == (
+        "path [REDACTED] leaked; decoy C:xtempxapixtoken stays"
+    ), (
+        "REDACT_SECRETS: the backslash-containing secret must collapse to "
+        "exactly one [REDACTED] literal (REQ-85C52948B7)"
+    )
+    assert backslash_result == redact_secrets(backslash_text, [backslash_secret]), (
+        "REDACT_SECRETS: backslash-secret redaction must be deterministic "
+        "(REQ-85C52948B7)"
+    )
+
+    # Adjacent consecutive occurrences (no separating text): every occurrence,
+    # including consecutive ones, must become exactly one [REDACTED] literal.
+    adjacent_text = "AAAABBBBAAAABBBB"
+    adjacent_result = redact_secrets(adjacent_text, ["AAAA", "BBBB"])
+
+    assert "AAAA" not in adjacent_result and "BBBB" not in adjacent_result, (
+        "REDACT_SECRETS: no supplied secret value may survive redaction "
+        "(REQ-85C52948B7)"
+    )
+    assert adjacent_result == "[REDACTED][REDACTED][REDACTED][REDACTED]", (
+        "REDACT_SECRETS: every occurrence, including adjacent consecutive "
+        "ones, must be replaced by exactly one [REDACTED] literal "
+        "(REQ-85C52948B7)"
+    )
+    assert adjacent_result.count("[REDACTED]") == 4, (
+        "REDACT_SECRETS: each of the four adjacent occurrences must be "
+        "redacted exactly once (REQ-85C52948B7)"
+    )
+    assert adjacent_result == redact_secrets(adjacent_text, ["AAAA", "BBBB"]), (
+        "REDACT_SECRETS: adjacent-occurrence redaction must be deterministic "
+        "(REQ-85C52948B7)"
+    )
+
+
 def test_add_output_concatenates_two_output_strings_additively() -> None:
     try:
         from shared_tools.fake_terminal import add_output
