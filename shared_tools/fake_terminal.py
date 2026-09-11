@@ -110,7 +110,11 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     if not values:
         return text
     pattern = re.compile("|".join(re.escape(value) for value in values))
-    return pattern.sub("[REDACTED]", text)
+    # REQ-85C52948B7 (exact-literal contract): a callable replacement
+    # inserts the exact "[REDACTED]" literal verbatim for every occurrence,
+    # so the marker is never re-interpreted as a re.sub template and every
+    # supplied-secret occurrence collapses to the same literal, deterministically.
+    return pattern.sub(lambda _match: "[REDACTED]", text)
 
 
 def add_output(first: str, second: str) -> str:
