@@ -61,10 +61,18 @@ def test_simulate_command_returns_structured_result() -> None:
     result = simulate_command("echo hello")
 
     assert isinstance(result, dict)
-    assert set(result) == {"stdout", "stderr", "returncode"}
+    assert set(result) == {"stdout", "stderr", "returncode", "command"}
     assert isinstance(result["stdout"], str)
     assert isinstance(result["stderr"], str)
     assert isinstance(result["returncode"], int)
+    assert isinstance(result["command"], str), (
+        "COMMAND_FIELD_DATA: the returned structure must explicitly surface "
+        "the command text as an independent str data field (REQ-413A5B74FD)"
+    )
+    assert result["command"] == "echo hello", (
+        "COMMAND_FIELD_DATA: the command field must carry the command text "
+        "verbatim as inert data (REQ-413A5B74FD)"
+    )
     assert simulate_command("echo hello") == result
 
 
@@ -202,9 +210,15 @@ def test_simulate_command_treats_command_text_as_data() -> None:
 
     result = simulate_command(command)
 
-    assert set(result) == {"stdout", "stderr", "returncode"}, (
+    assert set(result) == {"stdout", "stderr", "returncode", "command"}, (
         "COMMAND_TEXT_AS_DATA: simulate_command must return the structured "
-        "result dict (REQ-413A5B74FD)"
+        "result dict, including the explicit command data field "
+        "(REQ-413A5B74FD)"
+    )
+    assert result["command"] == command, (
+        "COMMAND_TEXT_AS_DATA: the explicit command field must carry the "
+        "command text verbatim as inert data, independently of stdout "
+        "(REQ-413A5B74FD)"
     )
     assert command in result["stdout"], (
         "COMMAND_TEXT_AS_DATA: the command text must be embedded verbatim "
@@ -223,9 +237,14 @@ def test_simulate_command_presents_command_text_as_inert_data() -> None:
 
     result = simulate_command(command)
 
-    assert set(result) == {"stdout", "stderr", "returncode"}, (
+    assert set(result) == {"stdout", "stderr", "returncode", "command"}, (
         "INERT_COMMAND_DATA: simulate_command must return the structured "
-        "result dict (REQ-413A5B74FD)"
+        "result dict, including the explicit command data field "
+        "(REQ-413A5B74FD)"
+    )
+    assert result["command"] == command, (
+        "INERT_COMMAND_DATA: the explicit command field must carry the "
+        "command text verbatim as inert data (REQ-413A5B74FD)"
     )
     assert command in result["stdout"], (
         "INERT_COMMAND_DATA: the command text must be embedded verbatim in "
@@ -245,9 +264,14 @@ def test_simulate_command_legacy_pinned_input_is_inert_data() -> None:
 
     result = simulate_command(command)
 
-    assert set(result) == {"stdout", "stderr", "returncode"}, (
+    assert set(result) == {"stdout", "stderr", "returncode", "command"}, (
         "INERT_COMMAND_DATA: simulate_command must return the structured "
-        "result dict (REQ-413A5B74FD)"
+        "result dict, including the explicit command data field "
+        "(REQ-413A5B74FD)"
+    )
+    assert result["command"] == command, (
+        "INERT_COMMAND_DATA: the explicit command field must carry the "
+        "command text verbatim as inert data (REQ-413A5B74FD)"
     )
     assert command in result["stdout"], (
         "INERT_COMMAND_DATA: the command text must be embedded verbatim in "
@@ -265,6 +289,132 @@ def test_simulate_command_legacy_pinned_input_is_inert_data() -> None:
         "INERT_COMMAND_DATA: simulate_command output must present the "
         "command text as inert data and must not carry the "
         "'[SIMULATED] Executing:' execution marker (REQ-413A5B74FD)"
+    )
+
+
+def test_simulate_command_surfaces_command_text_as_explicit_inert_data_field() -> None:
+    """REQ-413A5B74FD: the returned structure explicitly carries the command text.
+
+    Deterministic proof, for a variety of inputs (including empty, blank,
+    multi-line, and non-ASCII text), that the returned dict exposes the
+    command text as its own independent data field: byte-for-byte the
+    input string, typed as ``str``, never transformed or executed. The
+    existing fields keep their exact prior values, so the structure is a
+    strict superset of the previous return dict.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    commands = [
+        "",
+        "   ",
+        "echo FIELD_DATA_11",
+        "ls -la | grep pattern && touch /tmp/field-data-proof",
+        "multi\nline\ncmd",
+        "unicode-\u00fcn\u00efc\u00f8d\u00e9",
+    ]
+
+    for command in commands:
+        result = simulate_command(command)
+
+        assert isinstance(result, dict)
+        assert set(result) == {"stdout", "stderr", "returncode", "command"}, (
+            "EXPLICIT_DATA_FIELD: the returned structure must explicitly "
+            "surface the command text as an independent data field "
+            "(REQ-413A5B74FD)"
+        )
+        assert isinstance(result["command"], str), (
+            "EXPLICIT_DATA_FIELD: the command data field must be a str "
+            "holding inert text, not a callable or side effect "
+            "(REQ-413A5B74FD)"
+        )
+        assert result["command"] == command, (
+            "EXPLICIT_DATA_FIELD: the command data field must carry the "
+            "command text verbatim, byte-for-byte unchanged, as data "
+            "rather than executed (REQ-413A5B74FD)"
+        )
+        assert result["stdout"] == run_command(command), (
+            "EXPLICIT_DATA_FIELD: stdout must still mirror run_command "
+            "exactly for every command (REQ-413A5B74FD, REQ-0C50BE10F3)"
+        )
+        assert result["stderr"] == "" and result["returncode"] == 0, (
+            "EXPLICIT_DATA_FIELD: the existing fields must keep their "
+            "deterministic inert values (REQ-413A5B74FD)"
+        )
+        assert "[SIMULATED] Executing:" not in result["stdout"], (
+            "EXPLICIT_DATA_FIELD: the command text must stay under the "
+            "inert label, never an execution marker (REQ-413A5B74FD)"
+        )
+        assert simulate_command(command) == result, (
+            "EXPLICIT_DATA_FIELD: the structured result, including the "
+            "explicit command data field, must be deterministic "
+            "(REQ-413A5B74FD)"
+        )
+
+
+def test_simulate_command_command_field_is_inert_data_at_runtime(
+    monkeypatch, tmp_path
+) -> None:
+    """Runtime complement: the explicit command field is inert data.
+
+    REQ-413A5B74FD: the deterministic tests must prove the returned
+    structure and that the command text is treated as data. The real
+    subprocess/shell entry points are armed so that any attempt to reach
+    them fails, and the 'command' field of the returned dict must carry
+    the exact command text verbatim while producing no filesystem side
+    effect -- proof that it is data, not an action.
+    """
+    import os
+    import subprocess
+
+    from shared_tools.fake_terminal import simulate_command
+
+    def subsystem_violation(*_args, **_kwargs):
+        raise AssertionError(
+            "FAKE_TERMINAL_RUNTIME_SUBSYSTEM_VIOLATION: simulate_command "
+            "reached a real subprocess/shell entry point; the command "
+            "text must be treated as inert data (REQ-413A5B74FD)"
+        )
+
+    for entry_point in (
+        "Popen",
+        "run",
+        "call",
+        "check_call",
+        "check_output",
+        "getoutput",
+        "getstatusoutput",
+    ):
+        monkeypatch.setattr(subprocess, entry_point, subsystem_violation)
+    monkeypatch.setattr(os, "system", subsystem_violation)
+    monkeypatch.setattr(os, "popen", subsystem_violation)
+    for entry_point in ("execv", "execve", "execvp", "execvpe"):
+        monkeypatch.setattr(os, entry_point, subsystem_violation)
+
+    marker = "FIELD_DATA_PROOF_7C3A"
+    side_effect_path = tmp_path / "field_execution_proof.txt"
+    command = f"echo {marker} && touch {side_effect_path}"
+
+    result = simulate_command(command)
+
+    assert set(result) == {"stdout", "stderr", "returncode", "command"}, (
+        "FIELD_DATA_PROOF: the returned structure must explicitly surface "
+        "the command text as an independent data field (REQ-413A5B74FD)"
+    )
+    assert result["command"] == command, (
+        "FIELD_DATA_PROOF: the command field must carry the exact command "
+        "text verbatim as inert data (REQ-413A5B74FD)"
+    )
+    assert marker not in result["stdout"].splitlines(), (
+        "FIELD_DATA_PROOF: a bare marker line in stdout would prove the "
+        "command was executed by a shell (REQ-413A5B74FD)"
+    )
+    assert not side_effect_path.exists(), (
+        "FIELD_DATA_PROOF: a filesystem side effect would prove real "
+        "command execution (REQ-413A5B74FD)"
+    )
+    assert simulate_command(command) == result, (
+        "FIELD_DATA_PROOF: the structured result must be deterministic "
+        "(REQ-413A5B74FD)"
     )
 
 

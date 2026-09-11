@@ -38,7 +38,13 @@ def simulate_command(command: str) -> dict:
     REQ-413A5B74FD: the command text is presented as inert data under the
     '[SIMULATED] Command:' label, leaving the embedded command text
     verbatim, so deterministic tests prove the command text is treated as
-    data rather than executed.
+    data rather than executed. The returned dict also explicitly surfaces
+    the command text as an independent, verifiable data field under the
+    ``command`` key: byte-for-byte the input string, never executed or
+    transformed, so deterministic tests can prove ``result["command"] ==
+    command`` directly. This field is purely additive; the existing
+    ``stdout``, ``stderr``, and ``returncode`` keys and their values are
+    unchanged.
     """
     # REQ-0C50BE10F3: stdout is derived directly from run_command(command),
     # explicitly preserving run_command's deterministic output format. The
@@ -48,6 +54,9 @@ def simulate_command(command: str) -> dict:
         "stdout": stdout,
         "stderr": "",
         "returncode": 0,
+        # REQ-413A5B74FD: the command text is explicitly surfaced as inert
+        # data in its own field, verbatim and independently verifiable.
+        "command": command,
     }
 
 
