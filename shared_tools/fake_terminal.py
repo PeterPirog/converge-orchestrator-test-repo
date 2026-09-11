@@ -60,6 +60,26 @@ def simulate_command(command: str) -> dict:
     }
 
 
+def _canonical_secret_order(secrets: Iterable[str]) -> list[str]:
+    """Return the non-empty, de-duplicated secret values in canonical order.
+
+    REQ-CF0D222BF0 / ACCEPT-002 (determinism contract): this is the single
+    canonical ordering the redaction alternation is built from, so the result
+    is a pure function of the set of supplied secret values. Empty secret
+    values are ignored and duplicates collapse to a single value, then the
+    remaining values are sorted into a total order -- longest value first,
+    with a lexicographic tie-break. Because that order is fixed by the values
+    themselves, it is identical whatever iterable form the secrets arrive in,
+    in whatever order, and under whatever string hashing. Putting the longest
+    value first also means that, when supplied secrets overlap, the longest
+    match wins and no supplied secret value survives redaction.
+    """
+    return sorted(
+        {secret for secret in secrets if secret},
+        key=lambda value: (-len(value), value),
+    )
+
+
 def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     """Redact every non-empty supplied secret value that occurs in text.
 
@@ -99,14 +119,13 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     # state. The only helpers called are the pure ``re`` functions
     # re.escape, re.compile, and re.Pattern.sub. No globals, no mutables,
     # no side effects.
-    # REQ-CF0D222BF0 (determinism): canonicalizing to longest-first / lexicographic
-    # order makes the alternation, and hence the output, independent of the order
-    # the secrets are supplied in and of set/hash iteration order; for overlapping
-    # secrets the longest match wins.
-    values = sorted(
-        {secret for secret in secrets if secret},
-        key=lambda value: (-len(value), value),
-    )
+    # REQ-CF0D222BF0 (determinism): the non-empty supplied secrets are
+    # canonicalized by _canonical_secret_order (longest first, lexicographic
+    # tie-break) into an order fixed by the values themselves, so the
+    # alternation -- and hence the redacted output -- is independent of the
+    # order the secrets are supplied in and of set/hash iteration order; for
+    # overlapping secrets the longest match wins.
+    values = _canonical_secret_order(secrets)
     if not values:
         return text
     pattern = re.compile("|".join(re.escape(value) for value in values))
