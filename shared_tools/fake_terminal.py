@@ -1,4 +1,16 @@
-"""Fake terminal for simulating command execution in acceptance tests."""
+"""Fake terminal for simulating command execution in acceptance tests.
+
+Structured command simulation (REQ-0C50BE10F3 / ACCEPT-001): the
+``stdout`` field of the structured simulation result for a command must
+EXACTLY mirror ``run_command(command)`` -- a byte-for-byte mirror of
+``run_command``'s deterministic output. This exact-mirror contract holds
+for EVERY command string, including legacy-pinned inputs: no
+special-casing, no reformatting, no transformation, so the mirrored
+``stdout`` equals ``run_command(command)`` for any ``command``. The
+existing ``run_command(command: str) -> str`` behavior and public API are
+preserved unchanged; the structured result only reads ``run_command``'s
+output.
+"""
 
 
 def run_command(command: str) -> str:
