@@ -2,7 +2,14 @@
 
 
 def run_command(command: str) -> str:
-    """Simulate running a command and return deterministic output."""
+    """Simulate running a command and return deterministic output.
+
+    Simulator constraint (REQ-879DB2129D): this function must remain a
+    simulator. It must not call ``subprocess``, ``os.system``, a shell,
+    or any other mechanism that executes external processes or performs
+    real I/O; it only returns a stable, deterministic placeholder for
+    the requested command.
+    """
     return f"[SIMULATED] Executing: {command}\n[SIMULATED] Output placeholder"
 
 
