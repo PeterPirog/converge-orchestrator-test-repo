@@ -3,19 +3,6 @@
 import re
 from collections.abc import Iterable
 
-# Legacy output compatibility table: the exact input(s) whose previously
-# observable output is pinned by the pre-existing deterministic test
-# (test_run_command_is_deterministic_and_non_executing). These keep the
-# historical '[SIMULATED] Executing:' wording so that previously observable
-# output for that fixed contract is preserved; every other command text is
-# presented under the inert '[SIMULATED] Command:' label.
-_LEGACY_OUTPUT_BY_COMMAND = {
-    "echo SHOULD_NOT_RUN": (
-        "[SIMULATED] Executing: echo SHOULD_NOT_RUN\n"
-        "[SIMULATED] Output placeholder"
-    ),
-}
-
 
 def run_command(command: str) -> str:
     """Simulate running a command and return deterministic output.
@@ -25,15 +12,11 @@ def run_command(command: str) -> str:
     call is made via the os module, and no shell is ever invoked.
 
     REQ-413A5B74FD: the command text is presented verbatim as inert data
-    under an inert '[SIMULATED] Command:' label rather than an execution
+    under the inert '[SIMULATED] Command:' label rather than an execution
     marker, so deterministic tests prove the command text is treated as
-    data rather than executed. The exact legacy-pinned input keeps its
-    historical '[SIMULATED] Executing:' wording for backward
-    compatibility with the previously observable output.
+    data rather than executed. Every command is presented consistently
+    under this single inert label.
     """
-    legacy = _LEGACY_OUTPUT_BY_COMMAND.get(command)
-    if legacy is not None:
-        return legacy
     return f"[SIMULATED] Command: {command}\n[SIMULATED] Output placeholder"
 
 
@@ -50,18 +33,12 @@ def simulate_command(command: str) -> dict:
     dict with stdout, stderr, and returncode keys.
 
     REQ-413A5B74FD: the command text is presented as inert data under the
-    '[SIMULATED] Command:' label. The structured API normalizes only the
-    leading legacy '[SIMULATED] Executing:' execution marker to
-    '[SIMULATED] Command:', leaving the embedded command text verbatim, so
-    deterministic tests prove the command text is treated as data rather
-    than executed.
+    '[SIMULATED] Command:' label, leaving the embedded command text
+    verbatim, so deterministic tests prove the command text is treated as
+    data rather than executed.
     """
-    stdout = run_command(command)
-    marker = "[SIMULATED] Executing:"
-    if stdout.startswith(marker):
-        stdout = "[SIMULATED] Command:" + stdout[len(marker):]
     return {
-        "stdout": stdout,
+        "stdout": run_command(command),
         "stderr": "",
         "returncode": 0,
     }
