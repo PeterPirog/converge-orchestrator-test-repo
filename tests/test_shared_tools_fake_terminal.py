@@ -587,6 +587,64 @@ def test_redact_secrets_normalization_is_stable_across_forms_orders_and_hash_see
         )
 
 
+def test_redact_secrets_accept002_contract_repeated_exact_literal_empty_ignored() -> None:
+    """REQ-A59E470230 / ACCEPT-002: deterministic secret redaction contract.
+
+    Pins the requirement clauses for the deterministic secret redaction
+    helper:
+      * every occurrence, including every repeated occurrence of a supplied
+        secret value, is replaced with the exact literal ``[REDACTED]``;
+      * empty secret values are ignored;
+      * when every supplied secret value is empty (or none at all is
+        supplied), the text is returned unchanged.
+    """
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-A59E470230)"
+        ) from exc
+
+    # The sample value is a plain inert placeholder word (no credential
+    # material) -- only the redaction behavior is under test here.
+    secret = "placeholder"
+    text = f"start {secret} mid {secret} end {secret} tail"
+
+    result = redact_secrets(text, [secret, secret, "", secret])
+
+    assert secret not in result, (
+        "ACCEPT002_CONTRACT: no supplied secret value may survive redaction "
+        "(REQ-A59E470230)"
+    )
+    assert result == "start [REDACTED] mid [REDACTED] end [REDACTED] tail", (
+        "ACCEPT002_CONTRACT: every occurrence, including every repeated "
+        "occurrence, must be replaced with the exact literal [REDACTED] "
+        "(REQ-A59E470230)"
+    )
+    assert result.count("[REDACTED]") == 3, (
+        "ACCEPT002_CONTRACT: exactly one [REDACTED] literal must replace each "
+        "of the three repeated occurrences (REQ-A59E470230)"
+    )
+    assert redact_secrets(text, [""]) == text, (
+        "ACCEPT002_CONTRACT: an empty secret value must be ignored, leaving "
+        "the text unchanged (REQ-A59E470230)"
+    )
+    assert redact_secrets(text, ["", ""]) == text, (
+        "ACCEPT002_CONTRACT: when every supplied secret value is empty the "
+        "text must be returned unchanged (REQ-A59E470230)"
+    )
+    assert redact_secrets(text, []) == text, (
+        "ACCEPT002_CONTRACT: an empty iterable of secret values must leave "
+        "the text unchanged (REQ-A59E470230)"
+    )
+    assert redact_secrets(text, [secret]) == result, (
+        "ACCEPT002_CONTRACT: redaction must be deterministic, independent of "
+        "duplicated and empty values in the supplied iterable (REQ-A59E470230)"
+    )
+
+
 def test_redact_secrets_prefers_longest_match_when_supplied_secrets_overlap() -> None:
     try:
         from shared_tools.fake_terminal import redact_secrets
