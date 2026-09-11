@@ -97,12 +97,19 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     occurrence, is replaced by the exact literal ``[REDACTED]``, and empty
     secret values are ignored.
 
-    No-I/O purity contract (REQ-0320AB815A / ACCEPT-002): the result is a
-    pure function of its two arguments, ``text`` and ``secrets``. The body
-    reads no environment variables, no files, no network resources, and no
-    process state; it performs no I/O of any kind and mutates no global or
+    No-I/O purity contract (REQ-0320AB815A / ACCEPT-002): the redacted text
+    is a pure function of exactly its two arguments, ``text`` and ``secrets``.
+    The helper must not read environment variables, files, network resources,
+    or process state, and it does not: it performs no I/O of any kind, reads
+    no state from the interpreter or the host, and mutates no global or
     module-level state, so the redacted text depends only on ``text`` and
-    ``secrets``.
+    ``secrets``. This contract is explicitly verifiable by inspection of the
+    body: the only names referenced beyond the two arguments are the pure
+    module-level helper ``_canonical_secret_order`` and the pure standard-
+    library ``re`` functions ``re.escape``, ``re.compile``, and
+    ``re.Pattern.sub`` (along with the pure built-in ``str.join``); none of
+    these reads environment variables, files, network resources, or process
+    state, so identical inputs yield identical output under any environment.
 
     Determinism contract (REQ-CF0D222BF0 / ACCEPT-002): before matching,
     the non-empty supplied secret values are canonicalized into a total
@@ -116,9 +123,10 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     """
     # REQ-0320AB815A (no-I/O): the entire implementation below performs no I/O
     # and reads no environment variables, files, network resources, or process
-    # state. The only helpers called are the pure ``re`` functions
-    # re.escape, re.compile, and re.Pattern.sub. No globals, no mutables,
-    # no side effects.
+    # state. The only references beyond the two arguments are the pure
+    # module-level helper _canonical_secret_order and the pure ``re`` functions
+    # re.escape, re.compile, and re.Pattern.sub (plus the pure built-in
+    # str.join). No globals read or written, no mutables, no side effects.
     # REQ-CF0D222BF0 (determinism): the non-empty supplied secrets are
     # canonicalized by _canonical_secret_order (longest first, lexicographic
     # tie-break) into an order fixed by the values themselves, so the
