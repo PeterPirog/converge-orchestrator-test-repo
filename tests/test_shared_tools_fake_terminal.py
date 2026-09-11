@@ -756,6 +756,69 @@ def test_redact_secrets_overlapping_inputs_are_deterministic_independent_of_set_
     )
 
 
+def test_canonical_secret_order_is_longest_first_and_input_order_independent() -> None:
+    """REQ-CF0D222BF0 / ACCEPT-002: the canonical redaction order is explicit.
+
+    Locks in the canonical ordering the redaction alternation is built from:
+    non-empty supplied secret values are de-duplicated and sorted into a total
+    order -- longest value first, with a lexicographic tie-break -- that is a
+    pure function of the value set, independent of the order or container the
+    values are supplied in, so no supplied secret value can survive redaction.
+    """
+    try:
+        from shared_tools.fake_terminal import _canonical_secret_order
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_CANONICAL_ORDER_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must expose the canonical secret ordering used by redact_secrets "
+            "(REQ-CF0D222BF0)"
+        ) from exc
+
+    import itertools
+
+    # Longest value first, with a lexicographic tie-break for equal lengths.
+    assert _canonical_secret_order(["tok", "token", "token123"]) == [
+        "token123",
+        "token",
+        "tok",
+    ], (
+        "CANONICAL_SECRET_ORDER: the canonical order must put the longest "
+        "value first (REQ-CF0D222BF0)"
+    )
+    # A longer value beats a shorter one even when it sorts later
+    # lexicographically ("banana" (6) precedes "apple" (5)).
+    assert _canonical_secret_order(["apple", "banana"]) == ["banana", "apple"]
+    # Equal-length values are tie-broken lexicographically, and the result
+    # does not depend on the order the values are supplied in.
+    assert _canonical_secret_order(["grape", "apple"]) == ["apple", "grape"]
+    assert _canonical_secret_order(["apple", "grape"]) == ["apple", "grape"], (
+        "CANONICAL_SECRET_ORDER: equal-length values must be tie-broken "
+        "lexicographically and the result must not depend on input order "
+        "(REQ-CF0D222BF0)"
+    )
+
+    # Empty values are ignored and duplicates collapse to a single value.
+    assert _canonical_secret_order(["z", "z", "", "zz", "zz"]) == ["zz", "z"], (
+        "CANONICAL_SECRET_ORDER: empty values must be ignored and duplicates "
+        "collapsed to a single value (REQ-CF0D222BF0)"
+    )
+
+    # The order is a pure function of the value set: identical for every
+    # permutation of the same values and when they arrive as an unordered set.
+    base = ["aa", "ab", "b", "a", "aa", ""]
+    expected = _canonical_secret_order(base)
+    assert expected == ["aa", "ab", "a", "b"]
+    for order in itertools.permutations(base):
+        assert _canonical_secret_order(list(order)) == expected, (
+            "CANONICAL_SECRET_ORDER: the canonical order must be identical "
+            f"for every supplied order (REQ-CF0D222BF0); order={order!r}"
+        )
+    assert _canonical_secret_order(set(base)) == expected, (
+        "CANONICAL_SECRET_ORDER: the canonical order must be identical when "
+        "the values are supplied as an unordered set (REQ-CF0D222BF0)"
+    )
+
+
 def test_redact_secrets_treats_regex_special_characters_as_literal() -> None:
     try:
         from shared_tools.fake_terminal import redact_secrets
