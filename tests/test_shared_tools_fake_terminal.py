@@ -10,9 +10,45 @@ def test_run_command_is_deterministic_and_non_executing() -> None:
     result = run_command(command)
 
     assert result == (
-        "[SIMULATED] Executing: echo SHOULD_NOT_RUN\n"
+        "[SIMULATED] Command: echo SHOULD_NOT_RUN\n"
         "[SIMULATED] Output placeholder"
     )
+
+
+def test_run_command_uses_inert_command_label_and_not_legacy_executing_marker() -> None:
+    """REQ-879DB2129D / REQ-413A5B74FD: consistent inert command label.
+
+    Every command -- including the previously legacy-pinned input -- must be
+    presented under the single inert '[SIMULATED] Command:' label rather
+    than a legacy '[SIMULATED] Executing:' execution marker, and the
+    structured API must mirror the raw API for the same input.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    commands = [
+        "echo SHOULD_NOT_RUN",
+        "echo hello",
+        "ls -la | grep pattern",
+        "multi\nline\ncmd",
+        "",
+    ]
+
+    for command in commands:
+        output = run_command(command)
+        assert "[SIMULATED] Executing:" not in output, (
+            "INERT_COMMAND_LABEL: run_command must not carry the legacy "
+            "'[SIMULATED] Executing:' execution marker (REQ-879DB2129D, "
+            "REQ-413A5B74FD)"
+        )
+        assert output.startswith("[SIMULATED] Command: "), (
+            "INERT_COMMAND_LABEL: run_command must present the command "
+            "under the inert '[SIMULATED] Command:' label (REQ-413A5B74FD)"
+        )
+        assert simulate_command(command)["stdout"] == output, (
+            "INERT_COMMAND_LABEL: simulate_command must mirror run_command "
+            "for every command, including the previously legacy-pinned input "
+            "(REQ-0C50BE10F3)"
+        )
 
 
 def test_format_output_wraps_terminal_fence() -> None:
