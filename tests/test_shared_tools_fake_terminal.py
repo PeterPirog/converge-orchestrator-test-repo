@@ -121,3 +121,38 @@ def test_get_simulation_info_provides_additive_public_function() -> None:
         "executes_commands": False,
         "deterministic": True,
     }
+
+
+def test_redact_secrets_basic() -> None:
+    """REQ-85C52948B7 (ACCEPT-002): deterministic secret redaction helper.
+
+    Every non-empty supplied secret value that occurs in ``text`` must be
+    redacted. The helper is imported lazily inside the test so that its
+    absence produces a deterministic failure (not a collection error) while
+    the module's existing tests continue to run.
+    """
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-85C52948B7)"
+        ) from exc
+
+    secrets = ["hunter2", "sk-live-abc123"]
+    text = "training log line with api key sk-live-abc123 and password hunter2 here"
+
+    result = redact_secrets(text, secrets)
+
+    assert "sk-live-abc123" not in result, (
+        "REDACT_SECRETS: non-empty supplied secret values occurring in text "
+        "must be redacted (REQ-85C52948B7)"
+    )
+    assert "hunter2" not in result, (
+        "REDACT_SECRETS: non-empty supplied secret values occurring in text "
+        "must be redacted (REQ-85C52948B7)"
+    )
+    assert result == redact_secrets(text, secrets), (
+        "REDACT_SECRETS: redaction must be deterministic (REQ-85C52948B7)"
+    )
