@@ -2,14 +2,52 @@ from shared_tools.fake_terminal import format_output, run_command
 
 
 def test_run_command_is_deterministic_and_non_executing() -> None:
+    """REQ-413A5B74FD: explicitly prove the returned structure and data treatment.
+
+    The single whole-string equality check is replaced by separate assertions
+    that prove (a) the returned structure: a plain string of exactly two
+    lines, a header line and a fixed placeholder line, and (b) that the
+    command text is treated as data: embedded verbatim, never interpreted.
+    """
     command = "echo SHOULD_NOT_RUN"
 
     result = run_command(command)
 
-    assert result == (
-        "[SIMULATED] Executing: echo SHOULD_NOT_RUN\n"
-        "[SIMULATED] Output placeholder"
-    )
+    # Returned structure: a plain string consisting of exactly two lines.
+    assert isinstance(result, str)
+    header, placeholder = result.split("\n")
+
+    # Returned structure: header echoes the command; placeholder is fixed.
+    assert header == f"[SIMULATED] Executing: {command}"
+    assert placeholder == "[SIMULATED] Output placeholder"
+
+    # Command text as data: embedded verbatim in the simulated output.
+    assert command in result
+
+    # Deterministic: the same command always returns the same structure.
+    assert run_command(command) == result
+
+
+def test_run_command_treats_command_text_as_data(tmp_path) -> None:
+    """REQ-413A5B74FD: command text is data, never an executable instruction.
+
+    Every path in the payload (plain, ``$(...)`` substitution, backtick
+    substitution) would create the marker file if it were interpreted. The
+    payload must instead appear verbatim in the simulated output and leave
+    no side effect behind.
+    """
+    marker = tmp_path / "req-413a5b74fd-side-effect"
+    command = f"touch {marker}; $(touch {marker}); `touch {marker}`"
+
+    result = run_command(command)
+
+    # Command text as data: the whole payload is embedded verbatim,
+    # unchanged, in the simulated header line.
+    assert command in result
+    assert result.split("\n")[0] == f"[SIMULATED] Executing: {command}"
+
+    # Command text as data: none of the payload was interpreted or executed.
+    assert not marker.exists()
 
 
 def test_run_command_stays_a_simulator_even_if_execution_is_blocked(monkeypatch) -> None:
