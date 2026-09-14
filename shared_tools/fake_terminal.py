@@ -50,14 +50,16 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
 
     Secret values are treated as literal data (never interpreted), and longer
     values are matched before shorter ones so a shorter value is never left
-    half-substituted inside a longer one.
+    half-substituted inside a longer one. Equally long values are broken
+    alphabetically, so the match order — and the output — never depends on
+    the supplied iterable's iteration order (e.g. a set).
     """
     values = [secret for secret in secrets if secret]
     if not values:
         return text
 
-    # Dedupe preserving first-occurrence order, then sort longest-first with a
-    # stable sort so the match order is fully deterministic for any input.
-    ordered = sorted(dict.fromkeys(values), key=len, reverse=True)
+    # Sort longest-first, breaking ties alphabetically, so the match order is
+    # fully deterministic and independent of the input's iteration order.
+    ordered = sorted(set(values), key=lambda value: (-len(value), value))
     pattern = re.compile("|".join(re.escape(value) for value in ordered))
     return pattern.sub("[REDACTED]", text)
