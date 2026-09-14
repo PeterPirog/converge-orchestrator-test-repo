@@ -216,6 +216,93 @@ def test_redact_secrets_accept002_contract_repeated_exact_literal_empty_ignored(
     )
 
 
+def test_redact_secrets_req5c3f7ab352_deterministic_repeated_and_empty() -> None:
+    """REQ-5C3F7AB352 (ACCEPT-002): deterministic contract for repeated & empty values.
+
+    requirements.md:L37 [ACCEPT-002 — Deterministic secret redaction helper]
+    requires that the deterministic tests cover repeated values and empty
+    values. This test pins the ``redact_secrets`` contract for exactly those
+    two cases and proves the output is fully deterministic: it depends only on
+    the set of non-empty secret values and the input text — never on how many
+    times a value is supplied, where it sits in the iterable, the iterable's
+    container type / iteration order, or the presence of empty values.
+    """
+    try:
+        from shared_tools.fake_terminal import redact_secrets
+    except ImportError as exc:
+        raise AssertionError(
+            "FAIL_RED_REDACT_SECRETS_NOT_IMPLEMENTED: shared_tools.fake_terminal "
+            "must provide a pure redact_secrets helper for training logs "
+            "(REQ-5C3F7AB352)"
+        ) from exc
+
+    # Inert placeholder value (no credential material) — only the
+    # redaction/determinism behavior is under test. The text holds REPEATED
+    # occurrences of that value.
+    secret = "placeholder"
+    text = f"a {secret} b {secret} c"
+    expected = "a [REDACTED] b [REDACTED] c"
+
+    # Canonical input: a single non-empty secret value.
+    baseline = redact_secrets(text, [secret])
+
+    # Determinism across repeated values, empty values, ordering, and
+    # container type: every formulation of the same logical secret set must
+    # redact to the identical output.
+    formulations = [
+        [secret, secret, secret],             # repeated values
+        [secret, "", secret, ""],             # repeated values + empty values
+        ["", "", secret],                      # empty values around a value
+        {"placeholder", ""},                   # set: unspecified iteration order
+        (value for value in (secret, "", secret)),  # generator: Iterable contract
+    ]
+    for formulation in formulations:
+        assert redact_secrets(text, formulation) == baseline, (
+            "REQ-5C3F7AB352 (ACCEPT-002): the redacted output must be "
+            "deterministic and independent of duplicated, reordered, empty, "
+            "or the container type of the supplied secret values "
+            "(REQ-5C3F7AB352)"
+        )
+
+    # Repeated values: every repeated occurrence is replaced with the exact
+    # literal marker, and no supplied non-empty value survives.
+    assert baseline == expected, (
+        "REQ-5C3F7AB352 (ACCEPT-002): every repeated occurrence of a "
+        "non-empty secret value must be replaced with the exact literal "
+        "[REDACTED] (REQ-5C3F7AB352)"
+    )
+    assert baseline.count("[REDACTED]") == 2, (
+        "REQ-5C3F7AB352 (ACCEPT-002): exactly one [REDACTED] literal per "
+        "repeated occurrence (REQ-5C3F7AB352)"
+    )
+    assert secret not in baseline, (
+        "REQ-5C3F7AB352 (ACCEPT-002): no supplied non-empty secret value may "
+        "survive redaction (REQ-5C3F7AB352)"
+    )
+
+    # Empty values: empty secret values are ignored; when no non-empty value
+    # is supplied the text is returned unchanged.
+    assert redact_secrets(text, [""]) == text, (
+        "REQ-5C3F7AB352 (ACCEPT-002): an empty secret value must be ignored "
+        "(REQ-5C3F7AB352)"
+    )
+    assert redact_secrets(text, ["", ""]) == text, (
+        "REQ-5C3F7AB352 (ACCEPT-002): all-empty secret values must leave the "
+        "text unchanged (REQ-5C3F7AB352)"
+    )
+    assert redact_secrets(text, []) == text, (
+        "REQ-5C3F7AB352 (ACCEPT-002): no supplied secret values must leave "
+        "the text unchanged (REQ-5C3F7AB352)"
+    )
+
+    # Determinism: repeated calls with identical inputs return identical
+    # output.
+    assert redact_secrets(text, [secret]) == baseline, (
+        "REQ-5C3F7AB352 (ACCEPT-002): repeated calls with identical inputs "
+        "must return identical output (REQ-5C3F7AB352)"
+    )
+
+
 def test_redact_secrets_is_pure_string_manipulation(monkeypatch) -> None:
     """REQ-0320AB815A (ACCEPT-002): no environment, file, network, or process access.
 

@@ -47,6 +47,11 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     output depends only on ``text`` and the supplied secret values, so
     repeated calls with identical inputs return identical output.
 
+    REQ-5C3F7AB352 (ACCEPT-002): the deterministic contract also covers
+    repeated and empty secret values — duplicated values and empty values in
+    the supplied iterable never change the output, which depends only on the
+    set of non-empty values and the input text.
+
     REQ-0320AB815A (ACCEPT-002): the redaction is pure string manipulation —
     it reads no environment variables, files, network resources, or process
     state, and secret values are treated as literal data (never interpreted).
