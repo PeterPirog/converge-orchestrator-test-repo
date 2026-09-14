@@ -30,3 +30,26 @@ def get_simulation_info() -> dict:
         "executes_commands": False,
         "deterministic": True,
     }
+
+
+REDACTED_MARKER = "***REDACTED***"
+
+
+def redact_secrets(text: str, secrets: list) -> str:
+    """Redact supplied secret values from text for training logs.
+
+    REQ-85C52948B7 (ACCEPT-002 — Deterministic secret redaction helper): a
+    pure, deterministic helper. Every non-empty supplied secret value that
+    occurs in ``text`` is replaced with the redaction marker
+    ``***REDACTED***``. Empty supplied values are ignored, text that
+    contains no supplied secret value is returned unchanged, and identical
+    inputs always produce identical output.
+    """
+    ordered = sorted(
+        {secret for secret in secrets if secret},
+        key=lambda secret: (-len(secret), secret),
+    )
+    result = text
+    for secret in ordered:
+        result = result.replace(secret, REDACTED_MARKER)
+    return result
