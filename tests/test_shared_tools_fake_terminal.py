@@ -214,3 +214,129 @@ def test_redact_secrets_accept002_contract_repeated_exact_literal_empty_ignored(
         "ACCEPT002_CONTRACT: redaction must be deterministic, independent of "
         "duplicated and empty values in the supplied iterable (REQ-A59E470230)"
     )
+
+
+def test_redact_secrets_is_pure_string_manipulation(monkeypatch) -> None:
+    """REQ-0320AB815A (ACCEPT-002): no environment, file, network, or process access.
+
+    Behavioral proof: block every file, network, process, and environment
+    facility and verify the helper still performs correct pure string
+    manipulation. Source inspection is kept as supplementary evidence.
+    """
+    import builtins
+    import os
+    import socket
+    import subprocess
+
+    def _blocked(*_args, **_kwargs):
+        raise AssertionError(
+            "REQ-0320AB815A: redact_secrets must not access environment "
+            "variables, files, network resources, or process state"
+        )
+
+    # Block file access
+    monkeypatch.setattr(builtins, "open", _blocked)
+    # Block process execution
+    monkeypatch.setattr(subprocess, "run", _blocked)
+    monkeypatch.setattr(subprocess, "Popen", _blocked)
+    monkeypatch.setattr(subprocess, "call", _blocked)
+    monkeypatch.setattr(subprocess, "check_call", _blocked)
+    monkeypatch.setattr(subprocess, "check_output", _blocked)
+    monkeypatch.setattr(os, "system", _blocked)
+    monkeypatch.setattr(os, "popen", _blocked)
+    # Block network
+    monkeypatch.setattr(socket, "socket", _blocked)
+
+    from shared_tools.fake_terminal import redact_secrets
+
+    result = redact_secrets("key=secret123 value=abc", ["secret123"])
+    assert result == "key=[REDACTED] value=abc", (
+        "REQ-0320AB815A: redact_secrets must perform correct pure string "
+        "manipulation without accessing any I/O facility"
+    )
+
+    # Supplementary: source inspection confirms no I/O imports in the module.
+    import inspect
+
+    from shared_tools import fake_terminal
+
+    source = inspect.getsource(fake_terminal)
+
+    forbidden_tokens = (
+        "import re",
+        "re.compile",
+        "re.escape",
+        "re.sub",
+        "os.environ",
+        "os.path",
+        "open(",
+        "socket",
+        "subprocess",
+        "urllib",
+        "http",
+        "pathlib",
+    )
+
+    for token in forbidden_tokens:
+        assert token not in source, (
+            "REQ-0320AB815A: the redaction helper must not read environment "
+            f"variables, files, network resources, or process state (found "
+            f"{token!r} in source)"
+        )
+
+
+def test_redact_secrets_treats_metacharacter_secrets_as_literal_data() -> None:
+    """REQ-0320AB815A (ACCEPT-002): secret values are literal data.
+
+    Values that would be regular expressions if interpreted (wildcard,
+    group, character class) must redact only their exact literal text —
+    e.g. the literal secret ``a.c`` must never match the text ``abc``.
+    """
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = "key1=a.c key2=.c key3=abc pair=(group) class=[brk] star=* end"
+    secrets = ["a.c", "(group)", "[brk]", "*"]
+
+    result = redact_secrets(text, secrets)
+
+    assert result == (
+        "key1=[REDACTED] key2=.c key3=abc pair=[REDACTED] "
+        "class=[REDACTED] star=[REDACTED] end"
+    ), (
+        "REQ-0320AB815A: pattern-like secret values must be treated as "
+        "literal data, redacting only their exact literal text (ACCEPT-002)"
+    )
+    assert "abc" in result, (
+        "REQ-0320AB815A: the literal secret 'a.c' must not match the "
+        "non-literal text 'abc' (ACCEPT-002)"
+    )
+    assert ".c" in result, (
+        "REQ-0320AB815A: the literal secret 'a.c' must not match the "
+        "unrelated text '.c' (ACCEPT-002)"
+    )
+
+
+def test_redact_secrets_no_cascading_redaction_of_marker() -> None:
+    """REQ-85C52948B7 (ACCEPT-002): one-pass redaction does not re-scan the marker.
+
+    When a shorter secret is a substring of the ``[REDACTED]`` marker, the
+    single-pass scan must not apply it to text that has already been replaced.
+    This preserves the original one-pass regex semantics where all matches
+    are determined against the original input simultaneously.
+    """
+    from shared_tools.fake_terminal import redact_secrets
+
+    # 'a' is a substring of '[REDACTED]'; 'aa' is the longer secret.
+    # Correct one-pass: pos 0 → 'aa' matches → [REDACTED], pos 2 → 'a' → [REDACTED]
+    # Broken sequential: 'aa' → [REDACTED]a, then 'a' inside marker → [RE[REDACTED]CTED]
+    result = redact_secrets("aaa", ["aa", "a"])
+    assert result == "[REDACTED][REDACTED]", (
+        "REQ-85C52948B7: one-pass redaction must not re-scan replaced text; "
+        "a shorter secret must not match inside the [REDACTED] marker "
+        "(ACCEPT-002)"
+    )
+
+    # Determinism: same inputs always yield the same output.
+    assert result == redact_secrets("aaa", ["aa", "a"]), (
+        "REQ-85C52948B7: redaction must be deterministic (ACCEPT-002)"
+    )

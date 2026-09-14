@@ -12,7 +12,6 @@ simulated text, and that exact text is what structured simulations must
     reproduce.
 """
 
-import re
 from typing import Iterable
 
 
@@ -48,18 +47,41 @@ def redact_secrets(text: str, secrets: Iterable[str]) -> str:
     output depends only on ``text`` and the supplied secret values, so
     repeated calls with identical inputs return identical output.
 
-    Secret values are treated as literal data (never interpreted), and longer
-    values are matched before shorter ones so a shorter value is never left
-    half-substituted inside a longer one. Equally long values are broken
-    alphabetically, so the match order — and the output — never depends on
-    the supplied iterable's iteration order (e.g. a set).
+    REQ-0320AB815A (ACCEPT-002): the redaction is pure string manipulation —
+    it reads no environment variables, files, network resources, or process
+    state, and secret values are treated as literal data (never interpreted).
+
+    Longer values are matched before shorter ones at each position so a
+    shorter value is never left half-substituted inside a longer one.
+    Equally long values are broken alphabetically, so the match order — and
+    the output — never depends on the supplied iterable's iteration order
+    (e.g. a set). The scan is single-pass: replaced text is never re-examined,
+    so the ``[REDACTED]`` marker itself can never be matched by a later secret.
     """
     values = [secret for secret in secrets if secret]
     if not values:
         return text
 
-    # Sort longest-first, breaking ties alphabetically, so the match order is
-    # fully deterministic and independent of the input's iteration order.
+    # Sort longest-first, breaking ties alphabetically, so the match order
+    # is fully deterministic and independent of the input's iteration order.
     ordered = sorted(set(values), key=lambda value: (-len(value), value))
-    pattern = re.compile("|".join(re.escape(value) for value in ordered))
-    return pattern.sub("[REDACTED]", text)
+
+    # Single-pass greedy longest-match scan. At each position, try each
+    # secret (longest first) against the remaining text. On a match, emit
+    # the marker and advance past the matched span. Otherwise emit the
+    # current character and advance by one. Replaced text is never
+    # re-scanned, so the marker is never re-matched by a subsequent secret.
+    marker = "[REDACTED]"
+    result = []
+    i = 0
+    n = len(text)
+    while i < n:
+        for value in ordered:
+            if text.startswith(value, i):
+                result.append(marker)
+                i += len(value)
+                break
+        else:
+            result.append(text[i])
+            i += 1
+    return "".join(result)
