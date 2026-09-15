@@ -78,3 +78,25 @@ def test_add_output_concatenates_additively() -> None:
     first, second = "abc", "def"
 
     assert add_output(first, second) == first + second == "abcdef"
+
+
+def test_simulate_command_stdout_exact_mirror_req_0c50be10f3() -> None:
+    """REQ-0C50BE10F3: simulate_command.stdout must mirror run_command byte-for-byte.
+
+    The structured simulation API must not delegate to any real OS command
+    execution and must return stdout that is byte-for-byte identical to
+    run_command(command) for the same command string.
+    """
+    from shared_tools import fake_terminal
+
+    command = "echo SHOULD_NOT_RUN"
+
+    assert hasattr(fake_terminal, "simulate_command"), (
+        "REQ-0C50BE10F3: simulate_command stdout must exactly mirror run_command output"
+    )
+
+    result = fake_terminal.simulate_command(command)
+
+    assert result["stdout"] == run_command(command), (
+        "REQ-0C50BE10F3: simulate_command stdout must exactly mirror run_command output"
+    )
