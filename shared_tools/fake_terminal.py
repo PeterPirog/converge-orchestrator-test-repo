@@ -1,11 +1,5 @@
 """Fake terminal for simulating command execution in acceptance tests."""
 
-# ACCEPT-001 / REQ-879DB2129D (structured command simulation): this module
-# must remain a pure simulator. It never spawns processes or asks the OS to
-# execute real commands; every "execution" yields deterministic output.
-# This marker makes that contract explicit and checkable for compliance.
-_SIMULATOR_CONTRACT = "REQ-879DB2129D"
-
 
 def run_command(command: str) -> str:
     """Simulate running a command and return deterministic output."""
@@ -15,14 +9,3 @@ def run_command(command: str) -> str:
 def format_output(output: str) -> str:
     """Format terminal output for display."""
     return f"```terminal\n{output}\n```"
-
-
-def add_output(first: str, second: str) -> str:
-    """Concatenate two output strings additively.
-
-    ACCEPT-001 / REQ-F92FFC55BA: additive structured command simulation.
-    Returns first + second with both strings present in order, neither
-    dropped. Pure and deterministic: the result depends only on its
-    arguments and no state is read or written.
-    """
-    return first + second
