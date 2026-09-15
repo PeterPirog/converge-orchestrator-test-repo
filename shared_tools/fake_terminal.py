@@ -9,3 +9,8 @@ def run_command(command: str) -> str:
 def format_output(output: str) -> str:
     """Format terminal output for display."""
     return f"```terminal\n{output}\n```"
+
+
+def add_output(first: str, second: str) -> str:
+    """Return the additive concatenation of two output strings."""
+    return first + second
