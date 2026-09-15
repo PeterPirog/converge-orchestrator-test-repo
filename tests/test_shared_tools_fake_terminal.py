@@ -196,3 +196,34 @@ def test_redact_secrets_redacts_every_non_empty_supplied_secret() -> None:
     assert redact_secrets("plain text", [""]) == "plain text"
     # Redaction is deterministic for identical input.
     assert result == redact_secrets(text, secrets)
+
+
+def test_redact_secrets_repeated_occurrences_and_empty_ignored() -> None:
+    """REQ-A59E470230 (ACCEPT-002): exact-literal redaction of repeated secrets.
+
+    Every occurrence of every non-empty supplied secret must be replaced
+    with the exact literal "[REDACTED]", empty supplied secret values must
+    be ignored, and the redaction must be deterministic.
+    """
+    from shared_tools import fake_terminal
+
+    redact_secrets = fake_terminal.redact_secrets
+
+    text = "token=alpha99 retry alpha99 token=alpha99 pass=beta77 end"
+    secrets = ["alpha99", "", "beta77"]
+
+    result = redact_secrets(text, secrets)
+
+    # Every occurrence of every non-empty secret is replaced, all of them.
+    assert result == (
+        "token=[REDACTED] retry [REDACTED] token=[REDACTED] pass=[REDACTED] end"
+    )
+    assert result.count("[REDACTED]") == 4
+    assert "alpha99" not in result
+    assert "beta77" not in result
+    # Empty supplied values are ignored: "" must not inject the literal.
+    assert redact_secrets("a b c", [""]) == "a b c"
+    # Deterministic: identical inputs give identical outputs...
+    assert redact_secrets(text, secrets) == result
+    # ...with a normalized order independent of the supplied iteration order.
+    assert redact_secrets(text, ["beta77", "", "alpha99"]) == result
