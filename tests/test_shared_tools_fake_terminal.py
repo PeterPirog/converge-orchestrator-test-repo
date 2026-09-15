@@ -12,6 +12,61 @@ def test_run_command_is_deterministic_and_non_executing() -> None:
     )
 
 
+def test_run_command_stays_a_simulator_even_if_execution_is_blocked(monkeypatch) -> None:
+    """REQ-879DB2129D: run_command must remain a simulator.
+
+    Blocking subprocess and os.system proves the call path never reaches
+    real execution facilities while still returning deterministic output.
+    """
+    import os
+    import subprocess
+
+    def _execution_attempt(*args, **kwargs):
+        raise AssertionError("REQ-879DB2129D: run_command must remain a simulator")
+
+    monkeypatch.setattr(subprocess, "run", _execution_attempt)
+    monkeypatch.setattr(subprocess, "call", _execution_attempt)
+    monkeypatch.setattr(subprocess, "Popen", _execution_attempt)
+    monkeypatch.setattr(subprocess, "check_call", _execution_attempt)
+    monkeypatch.setattr(subprocess, "check_output", _execution_attempt)
+    monkeypatch.setattr(os, "system", _execution_attempt)
+
+    command = "echo SHOULD_NOT_RUN"
+
+    first = run_command(command)
+    second = run_command(command)
+
+    assert first == second
+    assert first == (
+        "[SIMULATED] Executing: echo SHOULD_NOT_RUN\n"
+        "[SIMULATED] Output placeholder"
+    )
+
+
+def test_fake_terminal_source_never_references_execution_facilities() -> None:
+    """REQ-879DB2129D: keep the simulator constraint testable as documentation."""
+    import inspect
+
+    from shared_tools import fake_terminal
+
+    source = inspect.getsource(fake_terminal)
+
+    blocked_tokens = (
+        "subprocess",
+        "os.system",
+        "os.popen",
+        "Popen",
+        "shell",
+        "check_call",
+        "check_output",
+    )
+
+    for token in blocked_tokens:
+        assert token not in source, (
+            f"REQ-879DB2129D: run_command must remain a simulator (found {token!r} in source)"
+        )
+
+
 def test_format_output_wraps_terminal_fence() -> None:
     assert format_output("line one\nline two") == "```terminal\nline one\nline two\n```"
 
