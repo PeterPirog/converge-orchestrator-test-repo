@@ -166,3 +166,33 @@ def test_simulate_command_returns_structure_and_treats_command_as_data(monkeypat
     assert result["stdout"] == (
         f"[SIMULATED] Executing: {command}\n[SIMULATED] Output placeholder"
     )
+
+
+def test_redact_secrets_redacts_every_non_empty_supplied_secret() -> None:
+    """REQ-85C52948B7: deterministic secret redaction for training logs.
+
+    Every non-empty supplied secret value that occurs in the text must be
+    redacted (no longer present in the returned text), empty supplied
+    values must be ignored, and the redaction must be deterministic.
+    """
+    from shared_tools import fake_terminal
+
+    assert hasattr(fake_terminal, "redact_secrets"), (
+        "RED-REQ-85C52948B7-redact_secrets_not_implemented"
+    )
+
+    redact_secrets = fake_terminal.redact_secrets
+
+    text = "api_key=sk-abc123 user=bob token=sk-abc123"
+    secrets = ["sk-abc123", "hunter2", ""]
+
+    result = redact_secrets(text, secrets)
+
+    # Every non-empty supplied secret that occurs in the text is redacted.
+    assert "sk-abc123" not in result
+    # A supplied secret that does not occur in the text leaves no trace.
+    assert "hunter2" not in result
+    # Empty supplied values are not secrets and must be ignored.
+    assert redact_secrets("plain text", [""]) == "plain text"
+    # Redaction is deterministic for identical input.
+    assert result == redact_secrets(text, secrets)
