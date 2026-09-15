@@ -6,6 +6,19 @@ def run_command(command: str) -> str:
     return f"[SIMULATED] Executing: {command}\n[SIMULATED] Output placeholder"
 
 
+def simulate_command(command: str) -> dict:
+    """Simulate running a command and return a structured result.
+
+    The stdout field is a byte-for-byte mirror of run_command(command).
+    No real OS command execution is performed.
+    """
+    return {
+        "stdout": run_command(command),
+        "stderr": "",
+        "returncode": 0,
+    }
+
+
 def format_output(output: str) -> str:
     """Format terminal output for display."""
     return f"```terminal\n{output}\n```"
