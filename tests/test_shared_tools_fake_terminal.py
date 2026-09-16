@@ -227,3 +227,41 @@ def test_redact_secrets_repeated_occurrences_and_empty_ignored() -> None:
     assert redact_secrets(text, secrets) == result
     # ...with a normalized order independent of the supplied iteration order.
     assert redact_secrets(text, ["beta77", "", "alpha99"]) == result
+
+
+def test_redact_secrets_overlapping_inputs_deterministic() -> None:
+    """REQ-CF0D222BF0 (ACCEPT-002): deterministic redaction of overlapping secrets.
+
+    Overlapping secrets are supplied secret values where one is a substring
+    of another (here "secret123" inside "secret1234"). redact_secrets must
+    collapse such inputs to a single deterministic output, and that output
+    must be independent of the iteration order the supplied collection
+    happens to expose (list order, reversed list order, or an unordered set).
+
+    The deterministic contract is: longer secrets are replaced first, ties
+    broken lexicographically. So "secret1234" is redacted as a whole unit,
+    leaving "api=[REDACTED] end". A shorter-first ordering would instead
+    corrupt the text to "api=[REDACTED]4 end", which is what this test
+    guards against.
+    """
+    from shared_tools import fake_terminal
+
+    redact_secrets = fake_terminal.redact_secrets
+
+    text = "api=secret1234 end"
+    expected = "api=[REDACTED] end"
+
+    # The same two overlapping secrets fed in every plausible iteration
+    # order must all produce the identical, correct result.
+    orderings = (
+        ["secret123", "secret1234"],   # shorter first
+        ["secret1234", "secret123"],   # longer first
+        {"secret123", "secret1234"},   # unordered set
+    )
+
+    for order in orderings:
+        result = redact_secrets(text, order)
+        assert result == expected, (
+            "REQ-CF0D222BF0: overlapping secret redaction must be deterministic "
+            f"independent of iteration order (got={result!r}, order={list(order)!r})"
+        )
