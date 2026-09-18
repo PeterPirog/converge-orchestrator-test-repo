@@ -72,7 +72,12 @@ def test_format_output_wraps_terminal_fence() -> None:
 
 
 def test_simulate_command_returns_structured_result(tmp_path) -> None:
-    """REQ-F92FFC55BA: simulate_command returns a deterministic structured result."""
+    """REQ-F92FFC55BA: simulate_command returns a deterministic structured result.
+
+    REQ-413A5B74FD: stdout must be a byte-for-byte mirror of run_command
+    for the same command, and the command text must be carried verbatim
+    as inert data with no side effects.
+    """
     from shared_tools.fake_terminal import simulate_command
 
     sentinel = tmp_path / "should_not_exist"
@@ -85,5 +90,7 @@ def test_simulate_command_returns_structured_result(tmp_path) -> None:
     assert result["exit_code"] == 0
     assert isinstance(result["stdout"], str)
     assert isinstance(result["stderr"], str)
+    assert result["stdout"] == run_command(command)
+    assert command in result["stdout"]
     assert simulate_command(command) == result
     assert not sentinel.exists()
