@@ -14,3 +14,14 @@ def test_run_command_is_deterministic_and_non_executing() -> None:
 
 def test_format_output_wraps_terminal_fence() -> None:
     assert format_output("line one\nline two") == "```terminal\nline one\nline two\n```"
+
+
+def test_simulate_command_structured_result() -> None:
+    from shared_tools.fake_terminal import simulate_command
+
+    assert simulate_command("ls") == {
+        "command": "ls",
+        "exit_code": 0,
+        "stdout": "[SIMULATED] Executing: ls\n[SIMULATED] Output placeholder",
+        "stderr": "",
+    }
