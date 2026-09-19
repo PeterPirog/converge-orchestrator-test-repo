@@ -194,3 +194,83 @@ def test_req_cf0d222bf0_overlapping_secrets_order_independent() -> None:
     assert order_a == order_b, (
         "RED-REQ-CF0D222BF0-overlapping-order-dependent"
     )
+
+
+def test_req_0320ab815a_redact_secrets_never_reads_external_state(monkeypatch) -> None:
+    """REQ-0320AB815A (ACCEPT-002): redact_secrets must not read environment
+    variables, files, network resources, or process state.
+
+    Deterministic compliance pin: while ``redact_secrets`` runs, every
+    forbidden entry point (env access, file access, socket APIs,
+    process-spawning APIs) is monkeypatched with a sentinel guard that fails
+    the test with the unique literal marker
+    ``REQ-0320AB815A-EXTERNAL-STATE-FORBIDDEN``; ``redact_secrets`` still
+    returns the exact deterministic redaction output for fixed inputs.
+    The guards are undone (``monkeypatch.undo``) as soon as the guarded
+    calls finish, so the pytest framework's own phase bookkeeping never
+    observes the sentinels. Fully deterministic: no real I/O, network, or
+    subprocess is ever performed.
+    """
+    import builtins
+    import os
+    import socket
+    import subprocess
+
+    sentinel = "REQ-0320AB815A-EXTERNAL-STATE-FORBIDDEN"
+
+    def _forbidden(*args: object, **kwargs: object) -> object:
+        raise RuntimeError(sentinel)
+
+    # Environment access: os.getenv and any os.environ mapping access.
+    class _SentinelEnvironment:
+        def _deny(self, *args: object, **kwargs: object) -> object:
+            raise RuntimeError(sentinel)
+
+        __getitem__ = _deny
+        __setitem__ = _deny
+        __delitem__ = _deny
+        __contains__ = _deny
+        __iter__ = _deny
+        __len__ = _deny
+        get = _deny
+        setdefault = _deny
+        update = _deny
+        pop = _deny
+        clear = _deny
+        copy = _deny
+        keys = _deny
+        values = _deny
+        items = _deny
+
+    monkeypatch.setattr(os, "environ", _SentinelEnvironment())
+    monkeypatch.setattr(os, "getenv", _forbidden)
+
+    # File access.
+    monkeypatch.setattr(builtins, "open", _forbidden)
+    monkeypatch.setattr(os, "open", _forbidden)
+
+    # Network access.
+    for name in ("socket", "create_connection", "getaddrinfo"):
+        monkeypatch.setattr(socket, name, _forbidden)
+
+    # Process spawning / process state.
+    for name in ("run", "Popen", "call", "check_call", "check_output"):
+        monkeypatch.setattr(subprocess, name, _forbidden)
+    monkeypatch.setattr(os, "system", _forbidden)
+    monkeypatch.setattr(os, "popen", _forbidden)
+
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = "api_key=sk-abc123 user=bob token=sk-abc123"
+    secrets = ["sk-abc123", "hunter2", ""]
+
+    try:
+        # Any forbidden access by redact_secrets (or anything it calls)
+        # raises the sentinel marker above. The exact deterministic
+        # redaction output is still produced for fixed inputs.
+        assert redact_secrets(text, secrets) == "api_key=[REDACTED] user=bob token=[REDACTED]"
+        # Determinism: identical inputs always yield identical output.
+        assert redact_secrets(text, secrets) == "api_key=[REDACTED] user=bob token=[REDACTED]"
+    finally:
+        # Restore the real APIs before pytest's phase bookkeeping runs.
+        monkeypatch.undo()
