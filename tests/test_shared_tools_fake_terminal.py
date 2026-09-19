@@ -102,3 +102,40 @@ def test_req_413a5b74fd_command_text_is_inert_data_no_side_effects(tmp_path) -> 
     assert command in result["stdout"]
     # No side effects / no execution: the sentinel file was never created.
     assert not sentinel.exists()
+
+
+def test_redact_secrets_redacts_every_non_empty_supplied_secret() -> None:
+    """REQ-85C52948B7 (ACCEPT-002): redact_secrets is a pure, deterministic redaction helper.
+
+    Every non-empty supplied secret value occurring in ``text`` is replaced by the
+    literal ``[REDACTED]``; empty supplied values are ignored; non-occurring secrets
+    leave no trace; and identical inputs always yield identical output. Pure and
+    deterministic: no I/O, no subprocess, no real command execution.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    # RED guard: the helper under test must exist. Before implementation this
+    # assertion fails with the literal marker; after implementation it passes and
+    # the redaction/determinism contract below is exercised.
+    assert hasattr(fake_terminal, "redact_secrets"), (
+        "RED-REQ-85C52948B7-redact_secrets_not_implemented"
+    )
+
+    redact_secrets = fake_terminal.redact_secrets
+
+    # Every non-empty supplied secret that occurs in the text is redacted and
+    # leaves no trace; a non-occurring supplied secret is simply absent.
+    result = redact_secrets(
+        "api_key=sk-abc123 user=bob token=sk-abc123", ["sk-abc123", "hunter2", ""]
+    )
+    assert "sk-abc123" not in result
+    assert "hunter2" not in result
+
+    # Empty supplied values are ignored entirely.
+    assert redact_secrets("plain text", [""]) == "plain text"
+
+    # Determinism: identical inputs always yield identical output.
+    repeated = redact_secrets(
+        "api_key=sk-abc123 user=bob token=sk-abc123", ["sk-abc123", "hunter2", ""]
+    )
+    assert repeated == result
