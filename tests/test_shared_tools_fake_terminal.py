@@ -176,3 +176,21 @@ def test_req_a59e470230_accept002_redact_secrets() -> None:
 
     # Determinism: identical inputs always yield identical output.
     assert redact_secrets(text, secrets) == result
+
+
+def test_req_cf0d222bf0_overlapping_secrets_order_independent() -> None:
+    """REQ-CF0D222BF0 (ACCEPT-002): overlapping secrets produce order-independent output.
+
+    When one secret is a substring of another, the output must be identical
+    regardless of input order. The deterministic sort key is
+    ``(-len(secret), secret)`` so longer secrets take priority and ties break
+    lexicographically. Pure and deterministic: no I/O, no subprocess.
+    """
+    from shared_tools.fake_terminal import redact_secrets
+
+    order_a = redact_secrets("xabcy", ["ab", "abc"])
+    order_b = redact_secrets("xabcy", ["abc", "ab"])
+
+    assert order_a == order_b, (
+        "RED-REQ-CF0D222BF0-overlapping-order-dependent"
+    )
