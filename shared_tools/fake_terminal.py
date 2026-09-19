@@ -1,7 +1,5 @@
 """Fake terminal for simulating command execution in acceptance tests."""
 
-from typing import Sequence
-
 
 def run_command(command: str) -> str:
     """Simulate running a command and return deterministic output."""
@@ -11,32 +9,3 @@ def run_command(command: str) -> str:
 def format_output(output: str) -> str:
     """Format terminal output for display."""
     return f"```terminal\n{output}\n```"
-
-
-def simulate_command(command: str) -> dict:
-    """Simulate running a command and return a structured result without executing it."""
-    return {
-        "command": command,
-        "exit_code": 0,
-        "stdout": run_command(command),
-        "stderr": "",
-    }
-
-
-def redact_secrets(text: str, secrets: Sequence[str]) -> str:
-    """Replace every non-empty supplied secret occurring in ``text`` with ``[REDACTED]``.
-
-    A pure, deterministic helper for training logs (REQ-85C52948B7 / REQ-CF0D222BF0
-    / ACCEPT-002): every non-empty supplied secret value that occurs in ``text`` is
-    replaced by the literal ``[REDACTED]``; empty supplied values are ignored;
-    non-occurring secrets leave no trace; and identical inputs always yield
-    identical output. Secrets are processed in a deterministic order — sorted by
-    ``(-len(secret), secret)`` so longer secrets take priority and ties break
-    lexicographically — so overlapping secrets yield order-independent output.
-    No I/O, no subprocess, no real command execution.
-    """
-    ordered = sorted((secret for secret in secrets if secret), key=lambda s: (-len(s), s))
-    result = text
-    for secret in ordered:
-        result = result.replace(secret, "[REDACTED]")
-    return result
