@@ -139,3 +139,40 @@ def test_redact_secrets_redacts_every_non_empty_supplied_secret() -> None:
         "api_key=sk-abc123 user=bob token=sk-abc123", ["sk-abc123", "hunter2", ""]
     )
     assert repeated == result
+
+
+def test_req_a59e470230_accept002_redact_secrets() -> None:
+    """REQ-A59E470230 (ACCEPT-002): redact_secrets exact-literal and repeated-occurrence contract.
+
+    Every occurrence of each non-empty supplied secret is replaced with the exact
+    literal ``[REDACTED]``; empty supplied secret values are ignored; all repeated
+    occurrences are replaced; and identical inputs yield identical output.
+    Pure and deterministic: no I/O, no subprocess, no real command execution.
+    """
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = "api_key=sk-abc123 user=bob token=sk-abc123"
+    secrets = ["sk-abc123", "hunter2", ""]
+
+    # Every occurrence of each non-empty supplied secret is replaced with the exact
+    # literal ``[REDACTED]`` — the count equals the number of replaced
+    # occurrences (``sk-abc123`` occurs twice).
+    result = redact_secrets(text, secrets)
+    assert "sk-abc123" not in result
+    assert "hunter2" not in result
+    assert result.count("[REDACTED]") == 2
+    assert result == "api_key=[REDACTED] user=bob token=[REDACTED]"
+
+    # Empty supplied secret values are ignored entirely.
+    assert redact_secrets("plain text", [""]) == "plain text"
+    assert redact_secrets("plain text", ["", ""]) == "plain text"
+
+    # All repeated occurrences of every non-empty supplied secret are replaced.
+    repeated_text = "top=hunter2 mid=hunter2 bottom=hunter2"
+    assert redact_secrets(repeated_text, ["hunter2", ""]) == (
+        "top=[REDACTED] mid=[REDACTED] bottom=[REDACTED]"
+    )
+    assert redact_secrets(repeated_text, ["hunter2", ""]).count("[REDACTED]") == 3
+
+    # Determinism: identical inputs always yield identical output.
+    assert redact_secrets(text, secrets) == result
