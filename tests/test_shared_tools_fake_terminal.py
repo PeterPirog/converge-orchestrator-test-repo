@@ -75,3 +75,30 @@ def test_req_0c50be10f3_structured_simulation_preserves_run_contract() -> None:
     # simulate_command["stdout"] exactly mirrors run_command for distinct commands.
     for command in ("ls", "echo SHOULD_NOT_RUN", "git status --porcelain"):
         assert simulate_command(command)["stdout"] == run_command(command)
+
+
+def test_req_413a5b74fd_command_text_is_inert_data_no_side_effects(tmp_path) -> None:
+    """REQ-413A5B74FD (ACCEPT-001): prove the required structure AND that the
+    command text is treated as inert data (carried verbatim, never executed).
+
+    A command embedding a real side-effect instruction (``touch <sentinel>``)
+    must be carried verbatim into ``result['command']`` and ``result['stdout']``
+    while the sentinel file is never created — no execution, no side effects.
+    Fully deterministic: no real OS command-execution API is invoked.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    sentinel = tmp_path / "REQ-413A5B74FD-SENTINEL"
+    command = f"touch {sentinel} && echo SHOULD_NOT_RUN"
+
+    result = simulate_command(command)
+
+    # Required structure: exactly the four documented keys.
+    assert set(result) == {"command", "exit_code", "stdout", "stderr"}
+    # The command text is carried verbatim (unmodified) into the result.
+    assert result["command"] == command
+    # stdout mirrors run_command exactly and carries the command text verbatim.
+    assert result["stdout"] == run_command(command)
+    assert command in result["stdout"]
+    # No side effects / no execution: the sentinel file was never created.
+    assert not sentinel.exists()
