@@ -274,3 +274,62 @@ def test_req_0320ab815a_redact_secrets_never_reads_external_state(monkeypatch) -
     finally:
         # Restore the real APIs before pytest's phase bookkeeping runs.
         monkeypatch.undo()
+
+
+def test_req_5c3f7ab352_redaction_never_logs_input_text_or_secrets() -> None:
+    """REQ-5C3F7AB352 (ACCEPT-002): redact_secrets must not log either the input
+    text or secret values, and must redact deterministically.
+
+    Deterministic compliance pin: while ``redact_secrets`` runs, the current
+    ``sys.stdout`` and ``sys.stderr`` are swapped for in-memory buffers; the
+    helper still returns the exact deterministic redaction output for fixed
+    inputs covering repeated secret occurrences, empty supplied values, and
+    non-occurring supplied values; and the captured stdout+stderr contain
+    neither the raw input text nor any supplied non-empty secret value. The
+    captured streams are restored in a ``finally`` block. Fully deterministic
+    and hermetic: no real I/O, network, subprocess, time, or randomness.
+    """
+    import io
+    import sys
+
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = "api_key=sk-abc123 user=bob token=sk-abc123"
+    secrets = ["sk-abc123", "hunter2", ""]
+    expected = "api_key=[REDACTED] user=bob token=[REDACTED]"
+
+    captured_out = io.StringIO()
+    captured_err = io.StringIO()
+    original_out = sys.stdout
+    original_err = sys.stderr
+
+    try:
+        sys.stdout = captured_out
+        sys.stderr = captured_err
+
+        # (a) Exact deterministic redaction for repeated, empty, and non-occurring
+        # secret values.
+        result = redact_secrets(text, secrets)
+        assert result == expected
+        # Every repeated occurrence of a non-empty supplied secret is replaced.
+        assert result.count("[REDACTED]") == 2
+        # Empty supplied values are ignored entirely.
+        assert redact_secrets("plain text", ["", ""]) == "plain text"
+        # Non-occurring supplied secrets leave no trace in the output.
+        assert "hunter2" not in result
+        # A secret value supplied more than once still yields the same output.
+        assert redact_secrets(text, ["sk-abc123", "sk-abc123"]) == expected
+        # Determinism: identical inputs always yield identical output.
+        assert redact_secrets(text, secrets) == expected
+    finally:
+        # Restore the original streams before pytest's bookkeeping runs.
+        sys.stdout = original_out
+        sys.stderr = original_err
+
+    # (b) Neither the raw input text nor any supplied non-empty secret value is
+    # logged/emitted to stdout or stderr.
+    emitted = captured_out.getvalue() + captured_err.getvalue()
+    assert text not in emitted
+    for secret in secrets:
+        if secret:
+            assert secret not in emitted
