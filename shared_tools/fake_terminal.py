@@ -21,4 +21,5 @@ def simulate_command(command: str) -> dict:
         "command": command,
         "exit_code": 0,
         "simulated": True,
+        "stdout": run_command(command),
     }

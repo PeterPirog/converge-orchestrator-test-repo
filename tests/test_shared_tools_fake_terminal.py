@@ -26,6 +26,21 @@ def test_simulate_command_returns_structured_result() -> None:
     assert result["exit_code"] == 0
 
 
+def test_simulate_command_stdout_mirrors_run_command() -> None:
+    """REQ-0C50BE10F3: simulate_command must mirror run_command's stdout (ACCEPT-001)."""
+    from shared_tools.fake_terminal import simulate_command
+
+    command = "echo SHOULD_NOT_RUN"
+    result = simulate_command(command)
+
+    assert "stdout" in result, (
+        "REQ-0C50BE10F3: stdout must exactly mirror run_command"
+    )
+    assert result["stdout"] == run_command(command), (
+        "REQ-0C50BE10F3: stdout must exactly mirror run_command"
+    )
+
+
 def test_fake_terminal_never_invokes_real_command_execution() -> None:
     """REQ-879DB2129D: fake_terminal must remain a pure command simulator.
 
