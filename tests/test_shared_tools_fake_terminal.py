@@ -127,3 +127,46 @@ def test_simulate_command_treats_injection_payload_as_inert_data() -> None:
     assert result["exit_code"] == 0
     assert result["simulated"] is True
     assert payload in result["stdout"]
+
+
+def test_redact_secrets_replaces_nonempty_secret_values() -> None:
+    """REQ-85C52948B7: redact_secrets redacts non-empty secrets (ACCEPT-002).
+
+    A pure, deterministic helper for training logs: every non-empty supplied
+    secret value that occurs in ``text`` is replaced by the fixed ``[REDACTED]``
+    placeholder; empty-string supplied secrets are ignored and never used as
+    replacement targets; text containing none of the supplied secrets is
+    returned unchanged; and repeated calls with identical input return
+    identical output.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    redact_secrets = getattr(fake_terminal, "redact_secrets", None)
+    assert redact_secrets is not None, (
+        "REQ-85C52948B7: redact_secrets helper must exist (ACCEPT-002)"
+    )
+
+    # (1) Every non-empty supplied secret occurring in the text is absent from
+    # the result, with the fixed '[REDACTED]' placeholder present in its place.
+    text = "api_key=sk-abc123 user=bob token=sk-abc123"
+    secrets = ["sk-abc123", "hunter2"]
+
+    result = redact_secrets(text, secrets)
+
+    assert "sk-abc123" not in result
+    assert result.count("[REDACTED]") == 2
+    assert result == "api_key=[REDACTED] user=bob token=[REDACTED]"
+    # A supplied secret that does not occur in the text leaves no trace.
+    assert "hunter2" not in result
+
+    # (2) An empty-string secret in the supplied set is ignored: the text is
+    # returned unchanged and no placeholder is inserted.
+    assert redact_secrets("hello world", [""]) == "hello world"
+
+    # (3) Text containing none of the supplied secrets is returned unchanged.
+    assert redact_secrets("hello world", ["sk-abc123"]) == "hello world"
+
+    # (4) Deterministic: repeated calls with identical input return identical
+    # output.
+    assert redact_secrets(text, secrets) == result
+    assert redact_secrets(text, secrets) == result
