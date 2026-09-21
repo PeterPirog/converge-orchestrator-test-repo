@@ -32,8 +32,12 @@ def redact_secrets(text: str, secrets: list) -> str:
     Empty-string supplied secrets are ignored and never used as replacement
     targets; text containing none of the supplied secrets is returned
     unchanged; and repeated calls with identical input return identical output.
+    The processing order is canonicalized (longest secret first, then value)
+    so overlapping secrets redact identically regardless of the supplied
+    iteration order.
     """
-    for secret in secrets:
-        if secret:
-            text = text.replace(secret, "[REDACTED]")
+    ordered = sorted((secret for secret in secrets if secret),
+                     key=lambda secret: (-len(secret), secret))
+    for secret in ordered:
+        text = text.replace(secret, "[REDACTED]")
     return text
