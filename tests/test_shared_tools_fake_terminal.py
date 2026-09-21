@@ -227,3 +227,29 @@ def test_redact_secrets_contract_exact_literal_empty_ignored_repeated() -> None:
             "REQ-A59E470230: repeated calls with identical input must return "
             "identical output"
         )
+
+
+def test_redact_secrets_overlapping_secrets_order_independent() -> None:
+    """REQ-CF0D222BF0: overlapping secrets redact identically in any order (ACCEPT-002).
+
+    Supplying overlapping secret values (one occurring within the other) must
+    yield identical redacted output regardless of the supplied iteration order.
+    Pure and deterministic: it inspects only the already-imported helper and
+    performs no subprocess, os.system / os.popen / os.exec*, network,
+    environment-variable, file-system, or process-state access.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    redact_secrets = getattr(fake_terminal, "redact_secrets", None)
+    assert redact_secrets is not None, (
+        "REQ-CF0D222BF0: redact_secrets helper must exist (ACCEPT-002)"
+    )
+
+    # Overlapping secrets: 'bc' occurs within 'abc'.
+    first = redact_secrets("abc", ["abc", "bc"])
+    second = redact_secrets("abc", ["bc", "abc"])
+
+    assert first == second, (
+        "REQ-CF0D222BF0: overlapping inputs must produce deterministic output "
+        "independent of set/hash iteration order"
+    )
