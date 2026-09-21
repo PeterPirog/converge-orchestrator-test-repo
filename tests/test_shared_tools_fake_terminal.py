@@ -102,3 +102,28 @@ def test_fake_terminal_never_invokes_real_command_execution() -> None:
         for frame in _iter_code(code):
             if "subprocess" in frame.co_names:
                 _violation(f"{name!r} references the subprocess global")
+
+
+def test_simulate_command_treats_injection_payload_as_inert_data() -> None:
+    """REQ-413A5B74FD: prove structure and that command text is inert data (ACCEPT-001).
+
+    A shell-injection payload must be embedded verbatim in the returned
+    ``command`` and ``stdout`` fields, proving the command text is treated as
+    inert data, not executed. Deterministic: no network, env-var, file-system,
+    or process-state access.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    payload = "touch /tmp/never_created_413a5b74fd && echo INJECTED"
+
+    result = simulate_command(payload)
+
+    # (1) Returned structure: exactly the four expected keys.
+    assert isinstance(result, dict)
+    assert set(result) == {"command", "exit_code", "simulated", "stdout"}
+
+    # (2) Command text is treated as inert data: embedded verbatim, never executed.
+    assert result["command"] == payload
+    assert result["exit_code"] == 0
+    assert result["simulated"] is True
+    assert payload in result["stdout"]
