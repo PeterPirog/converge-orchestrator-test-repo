@@ -23,3 +23,17 @@ def simulate_command(command: str) -> dict:
         "simulated": True,
         "stdout": run_command(command),
     }
+
+
+def redact_secrets(text: str, secrets: list) -> str:
+    """Replace every non-empty supplied secret occurring in ``text`` with ``[REDACTED]``.
+
+    A pure, deterministic helper for redacting secrets from training logs.
+    Empty-string supplied secrets are ignored and never used as replacement
+    targets; text containing none of the supplied secrets is returned
+    unchanged; and repeated calls with identical input return identical output.
+    """
+    for secret in secrets:
+        if secret:
+            text = text.replace(secret, "[REDACTED]")
+    return text
