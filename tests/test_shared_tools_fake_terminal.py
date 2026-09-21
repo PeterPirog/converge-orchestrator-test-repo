@@ -370,3 +370,39 @@ def test_req_0320ab815a_redact_secrets_never_reads_external_state() -> None:
     assert canary not in under_env, (
         "REQ-0320AB815A: redact_secrets must not read environment variables"
     )
+
+
+def test_redact_secrets_duplicate_values_in_list() -> None:
+    """REQ-5C3F7AB352: duplicate secret values in the input list (ACCEPT-002).
+
+    Repeated values in the supplied secrets list must produce byte-identical
+    output to passing the secret once, and duplicate empty-string entries are
+    ignored. Pure and deterministic: no network, environment-variable,
+    file-system, subprocess, or process-state access.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    redact_secrets = getattr(fake_terminal, "redact_secrets", None)
+    assert redact_secrets is not None, (
+        "REQ-5C3F7AB352: redact_secrets helper must exist (ACCEPT-002)"
+    )
+
+    # (1) Repeated values: ['tok','tok','tok'] is byte-identical to ['tok'].
+    text = "a=tok b=tok c=other"
+    once = redact_secrets(text, ["tok"])
+    tripled = redact_secrets(text, ["tok", "tok", "tok"])
+    assert tripled == once, (
+        "REQ-5C3F7AB352: duplicate secret values must produce byte-identical "
+        "output to passing the secret once"
+    )
+    assert tripled == "a=[REDACTED] b=[REDACTED] c=other"
+    assert tripled.count("[REDACTED]") == 2
+    assert "tok" not in tripled
+
+    # (2) Duplicate empty-string entries are ignored: text unchanged, no
+    # placeholder inserted.
+    clean = redact_secrets("hello world", ["", ""])
+    assert clean == "hello world", (
+        "REQ-5C3F7AB352: duplicate empty-string secrets must be ignored"
+    )
+    assert "[REDACTED]" not in clean
