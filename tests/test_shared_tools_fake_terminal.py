@@ -170,3 +170,60 @@ def test_redact_secrets_replaces_nonempty_secret_values() -> None:
     # output.
     assert redact_secrets(text, secrets) == result
     assert redact_secrets(text, secrets) == result
+
+
+def test_redact_secrets_contract_exact_literal_empty_ignored_repeated() -> None:
+    """REQ-A59E470230: redact_secrets deterministic redaction contract (ACCEPT-002).
+
+    Pins the exact-literal, empty-ignored, and repeated-occurrence behavior:
+    every non-empty supplied secret is replaced by the exact literal
+    ``[REDACTED]``, empty-string supplied secrets are ignored, and all repeated
+    occurrences of a secret are redacted. Pure and deterministic: it inspects
+    only the already-imported helper and performs no subprocess, os.system /
+    os.popen / os.exec*, network, environment-variable, file-system, or
+    process-state access.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    redact_secrets = getattr(fake_terminal, "redact_secrets", None)
+    assert redact_secrets is not None, (
+        "REQ-A59E470230: redact_secrets helper must exist (ACCEPT-002)"
+    )
+
+    # (a) A non-empty secret is replaced by the exact literal '[REDACTED]'.
+    fixture = "redaction-test-value"
+    text = f"prefix {fixture} suffix"
+    result = redact_secrets(text, [fixture])
+    assert result == "prefix [REDACTED] suffix", (
+        "REQ-A59E470230: non-empty secret must be replaced by the exact "
+        "literal '[REDACTED]'"
+    )
+    assert fixture not in result
+
+    # (b) An empty-string secret is ignored: text is left unchanged and no
+    # placeholder is inserted.
+    empty_only = redact_secrets("hello world", [""])
+    assert empty_only == "hello world", (
+        "REQ-A59E470230: an empty-string secret must be ignored"
+    )
+    assert "[REDACTED]" not in empty_only, (
+        "REQ-A59E470230: an empty-string secret must insert no placeholder"
+    )
+
+    # (c) Two occurrences of the same secret both become '[REDACTED]'.
+    repeated_text = f"a={fixture} b={fixture}"
+    repeated_result = redact_secrets(repeated_text, [fixture])
+    assert repeated_result == "a=[REDACTED] b=[REDACTED]", (
+        "REQ-A59E470230: every repeated occurrence of a secret must be "
+        "replaced by '[REDACTED]'"
+    )
+    assert repeated_result.count("[REDACTED]") == 2
+    assert fixture not in repeated_result
+
+    # (d) Deterministic: identical input across repeated calls yields identical
+    # output.
+    for _ in range(3):
+        assert redact_secrets(repeated_text, [fixture]) == repeated_result, (
+            "REQ-A59E470230: repeated calls with identical input must return "
+            "identical output"
+        )
