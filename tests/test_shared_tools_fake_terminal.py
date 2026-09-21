@@ -253,3 +253,120 @@ def test_redact_secrets_overlapping_secrets_order_independent() -> None:
         "REQ-CF0D222BF0: overlapping inputs must produce deterministic output "
         "independent of set/hash iteration order"
     )
+
+
+def test_req_0320ab815a_redact_secrets_never_reads_external_state() -> None:
+    """REQ-0320AB815A: redact_secrets reads no external state (ACCEPT-002).
+
+    Proven deterministically: the module namespace and the helper's
+    compiled code objects are scanned for external-state references, and
+    the helper's code object is executed in a namespace exposing only the
+    pure builtins ``sorted`` and ``len`` — any environment, file, network,
+    or process capability would raise ``NameError``. No real I/O, network,
+    or subprocess is performed; the in-process environment change is
+    restored immediately.
+    """
+    import io
+    import os
+    import pathlib
+    import shutil
+    import socket
+    import subprocess
+    import sys
+    import tempfile
+    import types
+    import urllib
+
+    import shared_tools.fake_terminal as fake_terminal
+
+    redact_secrets = getattr(fake_terminal, "redact_secrets", None)
+    assert redact_secrets is not None, (
+        "REQ-0320AB815A: redact_secrets helper must exist (ACCEPT-002)"
+    )
+
+    def _violation(detail: str) -> None:
+        raise AssertionError(f"REQ-0320AB815A violation: {detail}")
+
+    # (1) The module namespace exposes no external-state capability.
+    forbidden_objects = (os, sys, socket, subprocess, pathlib, shutil,
+                         tempfile, io, urllib, open, os.getenv, os.environ)
+    for name, value in vars(fake_terminal).items():
+        if any(value is item for item in forbidden_objects):
+            _violation(f"{name!r} is an external-state module or object")
+        if isinstance(value, io.IOBase):
+            _violation(f"{name!r} is an open file handle")
+        origin = getattr(value, "__module__", None)
+        if isinstance(origin, str) and origin.split(".", 1)[0] in {
+            "os", "sys", "socket", "subprocess", "pathlib", "shutil",
+            "tempfile", "io", "urllib", "http"}:
+            _violation(f"{name!r} originates from {origin!r}")
+
+    # (2) No code object of the helper references an external-state global.
+    forbidden = frozenset({
+        "os", "sys", "subprocess", "socket", "open", "io", "pathlib",
+        "shutil", "tempfile", "urllib", "http", "requests", "asyncio",
+        "getenv", "environ", "exec", "eval", "compile", "input",
+        "breakpoint", "exit", "quit", "__import__"})
+
+    def _iter_code(code: "types.CodeType"):
+        yield code
+        for const in code.co_consts:
+            if isinstance(const, types.CodeType):
+                yield from _iter_code(const)
+
+    code = getattr(redact_secrets, "__code__", None)
+    assert isinstance(code, types.CodeType), (
+        "REQ-0320AB815A: redact_secrets must be a plain Python function"
+    )
+    referenced = set()
+    for frame in _iter_code(code):
+        referenced.update(frame.co_names)
+    leaked = referenced & forbidden
+    assert not leaked, (
+        "REQ-0320AB815A violation: redact_secrets references external-state "
+        f"global(s): {sorted(leaked)}"
+    )
+
+    # (3) Purity sandbox: with only the pure builtins available, the body
+    # still returns the exact deterministic redaction for the fixed input.
+    fixed_text = "api_key=sk-abc123 user=bob token=sk-abc123"
+    fixed_secrets = ["sk-abc123", ""]
+    expected = "api_key=[REDACTED] user=bob token=[REDACTED]"
+    sandbox = types.FunctionType(code, {"sorted": sorted, "len": len})
+    try:
+        sandbox_result = sandbox(fixed_text, fixed_secrets)
+    except NameError as exc:
+        _violation(
+            f"redact_secrets requires external capability {exc.name!r}; it "
+            "must not read environment variables, files, network resources, "
+            "or process state"
+        )
+    assert sandbox_result == expected, (
+        "REQ-0320AB815A: fixed input must yield the exact deterministic "
+        "redaction output"
+    )
+    assert sandbox(fixed_text, fixed_secrets) == sandbox_result, (
+        "REQ-0320AB815A: repeated identical input must return identical "
+        "output"
+    )
+
+    # (4) Environment invariance: the real helper's output is identical even
+    # while a canary environment variable is present (in-process change,
+    # restored immediately).
+    env_name = "REQ_0320AB815A_PURITY_CANARY"
+    canary = "req0320ab815a-canary-must-never-appear"
+    prior = os.environ.get(env_name)
+    os.environ[env_name] = canary
+    try:
+        under_env = redact_secrets(fixed_text, fixed_secrets)
+    finally:
+        if prior is None:
+            os.environ.pop(env_name, None)
+        else:
+            os.environ[env_name] = prior
+    assert under_env == expected, (
+        "REQ-0320AB815A: output must not depend on environment variables"
+    )
+    assert canary not in under_env, (
+        "REQ-0320AB815A: redact_secrets must not read environment variables"
+    )
