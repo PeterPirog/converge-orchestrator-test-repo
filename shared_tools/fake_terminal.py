@@ -34,10 +34,24 @@ def redact_secrets(text: str, secrets: list) -> str:
     unchanged; and repeated calls with identical input return identical output.
     The processing order is canonicalized (longest secret first, then value)
     so overlapping secrets redact identically regardless of the supplied
-    iteration order.
+    iteration order. The original text is scanned in a single left-to-right
+    pass, so a supplied secret that is a substring of the ``[REDACTED]``
+    placeholder can never re-match an already produced replacement.
     """
     ordered = sorted((secret for secret in secrets if secret),
                      key=lambda secret: (-len(secret), secret))
-    for secret in ordered:
-        text = text.replace(secret, "[REDACTED]")
-    return text
+    parts = []
+    index = 0
+    while index < len(text):
+        match = None
+        for secret in ordered:
+            if text.startswith(secret, index):
+                match = secret
+                break
+        if match is None:
+            parts.append(text[index])
+            index += 1
+        else:
+            parts.append("[REDACTED]")
+            index += len(match)
+    return "".join(parts)
