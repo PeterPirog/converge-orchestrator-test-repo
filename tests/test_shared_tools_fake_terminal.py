@@ -583,3 +583,41 @@ def test_req_0c50be10f3_preserves_existing_run_command_behavior() -> None:
         "REQ-0C50BE10F3 (ACCEPT-001): simulate_command's stdout must be "
         "byte-identical to run_command's stdout"
     )
+
+
+def test_redact_secrets_substring_of_placeholder_secret() -> None:
+    """REQ-85C52948B7: a supplied secret that is a substring of '[REDACTED]' must not corrupt the replacement (ACCEPT-002).
+
+    Every non-empty supplied secret occurring in ``text`` must be replaced by
+    the exact '[REDACTED]' placeholder even when another supplied secret (here
+    'REDACT') is itself a substring of the placeholder; the corrupted form
+    '[[REDACTED]ED]' must never appear, in any supplied secret order. Pure
+    and deterministic: it inspects only the already-imported helper and
+    performs no subprocess, os.system / os.popen / os.exec*, network,
+    environment-variable, file-system, or process-state access.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    redact_secrets = getattr(fake_terminal, "redact_secrets", None)
+    assert redact_secrets is not None, (
+        "REQ-85C52948B7 PLACEHOLDER-INTEGRITY-MARKER: redact_secrets helper "
+        "must exist (ACCEPT-002)"
+    )
+
+    text = "key=mysecret extra"
+    expected = "key=[REDACTED] extra"
+
+    forward = redact_secrets(text, ["mysecret", "REDACT"])
+    reverse = redact_secrets(text, ["REDACT", "mysecret"])
+
+    assert forward == expected, (
+        "REQ-85C52948B7 PLACEHOLDER-INTEGRITY-MARKER: a supplied secret that "
+        "is a substring of the '[REDACTED]' placeholder must not corrupt the "
+        f"replacement; expected {expected!r}, got {forward!r}"
+    )
+    assert reverse == expected, (
+        "REQ-85C52948B7 PLACEHOLDER-INTEGRITY-MARKER: a supplied secret that "
+        "is a substring of the '[REDACTED]' placeholder must not corrupt the "
+        f"replacement regardless of supplied secret order; expected "
+        f"{expected!r}, got {reverse!r}"
+    )
