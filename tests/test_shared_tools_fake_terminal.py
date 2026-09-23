@@ -471,3 +471,60 @@ def test_req_f92ffc55ba_provides_additive_structured_public_function() -> None:
             f"REQ-F92FFC55BA (ACCEPT-001): the additive API must retain the "
             f"public function {public_name!r}"
         )
+
+
+def test_fake_terminal_code_objects_reference_no_os_shell_execution_globals() -> None:
+    """REQ-879DB2129D: no fake_terminal code object references os/shell-execution globals (ACCEPT-001).
+
+    Closes the residual gap in the existing REQ-879DB2129D code-object scan,
+    which checks only the ``subprocess`` global: here every compiled code
+    object of every ``shared_tools.fake_terminal`` function (including nested
+    code objects) must reference neither the ``os`` global nor an ``os``
+    command-execution primitive name (``system`` / ``popen`` / ``execv`` /
+    ``execve`` / ``execl`` / ``execle`` / ``execlp`` / ``execvp`` /
+    ``execvpe``).
+
+    Deterministic and entirely in-memory: it inspects only the already-imported
+    module's compiled code objects. It performs no subprocess, shell, network,
+    environment-variable, file-system, or process-state access.
+    """
+    import types
+
+    import shared_tools.fake_terminal as fake_terminal
+
+    # The ``os`` global plus the ``os`` command-execution primitive names
+    # (``os.system`` / ``os.popen`` / ``os.exec*``) as they would appear in a
+    # code object's ``co_names``.
+    forbidden_names = frozenset({
+        "os",
+        "system",
+        "popen",
+        "execv",
+        "execve",
+        "execl",
+        "execle",
+        "execlp",
+        "execvp",
+        "execvpe",
+    })
+
+    def _violation(detail: str) -> None:
+        raise AssertionError(f"REQ-879DB2129D violation: {detail}")
+
+    def _iter_code(code: "types.CodeType"):
+        yield code
+        for const in code.co_consts:
+            if isinstance(const, types.CodeType):
+                yield from _iter_code(const)
+
+    for name, value in vars(fake_terminal).items():
+        code = getattr(value, "__code__", None)
+        if not isinstance(code, types.CodeType):
+            continue
+        for frame in _iter_code(code):
+            leaked = frozenset(frame.co_names) & forbidden_names
+            if leaked:
+                _violation(
+                    f"{name!r} references the 'os' global or an os "
+                    f"command-execution primitive name(s): {sorted(leaked)}"
+                )
