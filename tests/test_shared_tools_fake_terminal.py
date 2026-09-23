@@ -406,3 +406,68 @@ def test_redact_secrets_duplicate_values_in_list() -> None:
         "REQ-5C3F7AB352: duplicate empty-string secrets must be ignored"
     )
     assert "[REDACTED]" not in clean
+
+
+def test_req_f92ffc55ba_provides_additive_structured_public_function() -> None:
+    """REQ-F92FFC55BA: additive public function for structured command simulation (ACCEPT-001).
+
+    Proves that ``shared_tools.fake_terminal`` provides the additive public
+    function ``simulate_command`` for structured command simulation, and that
+    the API is additive: the pre-existing public functions ``run_command``,
+    ``format_output`` and ``redact_secrets`` remain public alongside it.
+
+    Deterministic and entirely in-memory: it inspects only the
+    already-imported module's namespace and calls the pure helpers with fixed
+    literals. It performs no network, environment-variable, file-system,
+    subprocess, or process-state access.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    # (1) The additive public function for structured command simulation is
+    # present and is a plain, public, callable function.
+    simulate_command = getattr(fake_terminal, "simulate_command", None)
+    assert simulate_command is not None, (
+        "REQ-F92FFC55BA (ACCEPT-001): shared_tools.fake_terminal must "
+        "provide the additive public function simulate_command"
+    )
+    assert callable(simulate_command), (
+        "REQ-F92FFC55BA (ACCEPT-001): simulate_command must be callable"
+    )
+    assert not getattr(simulate_command, "__name__", "").startswith("_"), (
+        "REQ-F92FFC55BA (ACCEPT-001): simulate_command must be a public "
+        "(non-underscore) name"
+    )
+
+    # (2) Structured command simulation: a fixed command yields the exact
+    # structured result {command, exit_code, simulated, stdout}.
+    command = "echo REQ_F92FFC55BA_SHOULD_NOT_RUN"
+    result = simulate_command(command)
+
+    assert isinstance(result, dict), (
+        "REQ-F92FFC55BA (ACCEPT-001): simulate_command must return a "
+        "structured dict"
+    )
+    assert result["command"] == command, (
+        "REQ-F92FFC55BA (ACCEPT-001): the structured result must echo the "
+        "supplied command verbatim"
+    )
+    assert result["exit_code"] == 0, (
+        "REQ-F92FFC55BA (ACCEPT-001): the simulated exit_code must be 0"
+    )
+    assert result["simulated"] is True, (
+        "REQ-F92FFC55BA (ACCEPT-001): the structured result must report "
+        "simulated=True"
+    )
+    assert result["stdout"] == run_command(command), (
+        "REQ-F92FFC55BA (ACCEPT-001): the structured stdout must mirror "
+        "run_command"
+    )
+
+    # (3) The API is additive: every pre-existing public function is still
+    # present and callable alongside the new one.
+    for public_name in ("run_command", "format_output", "redact_secrets"):
+        public_attr = getattr(fake_terminal, public_name, None)
+        assert callable(public_attr), (
+            f"REQ-F92FFC55BA (ACCEPT-001): the additive API must retain the "
+            f"public function {public_name!r}"
+        )
