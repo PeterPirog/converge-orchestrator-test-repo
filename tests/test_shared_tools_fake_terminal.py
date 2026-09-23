@@ -109,12 +109,22 @@ def test_simulate_command_treats_injection_payload_as_inert_data() -> None:
 
     A shell-injection payload must be embedded verbatim in the returned
     ``command`` and ``stdout`` fields, proving the command text is treated as
-    inert data, not executed. Deterministic: no network, env-var, file-system,
-    or process-state access.
+    inert data, not executed. Deterministic: no network, env-var, or
+    process-state access; the only file-system touch is the fixed-literal
+    canary path, cleared before the call so the post-call check depends
+    solely on simulate_command.
     """
+    import os
+
     from shared_tools.fake_terminal import simulate_command
 
+    canary = "/tmp/never_created_413a5b74fd"
     payload = "touch /tmp/never_created_413a5b74fd && echo INJECTED"
+
+    # Determinism: clear any pre-existing canary so the post-call check
+    # depends only on simulate_command, not on prior host state.
+    if os.path.exists(canary):
+        os.remove(canary)
 
     result = simulate_command(payload)
 
@@ -127,6 +137,13 @@ def test_simulate_command_treats_injection_payload_as_inert_data() -> None:
     assert result["exit_code"] == 0
     assert result["simulated"] is True
     assert payload in result["stdout"]
+
+    # (3) Side-effect canary: the payload was never executed, so the canary
+    # file must not exist after the simulated call returned.
+    assert not os.path.exists(canary), (
+        "REQ-413A5B74FD: the command text must be inert data (canary file "
+        "must never be created by simulate_command)"
+    )
 
 
 def test_redact_secrets_replaces_nonempty_secret_values() -> None:
