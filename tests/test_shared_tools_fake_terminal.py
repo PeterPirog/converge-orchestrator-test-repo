@@ -528,3 +528,41 @@ def test_fake_terminal_code_objects_reference_no_os_shell_execution_globals() ->
                     f"{name!r} references the 'os' global or an os "
                     f"command-execution primitive name(s): {sorted(leaked)}"
                 )
+
+
+def test_req_0c50be10f3_preserves_existing_run_command_behavior() -> None:
+    """REQ-0C50BE10F3: the existing ``run_command(command: str) -> str`` contract
+    is preserved unchanged after the additive structured simulation (ACCEPT-001).
+
+    A str input must return a str with the exact legacy output for a fixed
+    command, and ``simulate_command``'s stdout must be byte-identical to
+    ``run_command``'s for the same input. Pure and deterministic: no
+    subprocess, shell, network, environment-variable, file-system, or
+    process-state access.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    command = "echo REQ_0C50BE10F3_SHOULD_NOT_RUN"
+    legacy_output = run_command(command)
+
+    # (1) A str input returns a str.
+    assert isinstance(legacy_output, str), (
+        "REQ-0C50BE10F3 (ACCEPT-001): run_command must return a str"
+    )
+
+    # (2) The exact legacy output is produced for the fixed command.
+    assert legacy_output == (
+        "[SIMULATED] Executing: " + command + "\n"
+        "[SIMULATED] Output placeholder"
+    ), (
+        "REQ-0C50BE10F3 (ACCEPT-001): the exact legacy run_command output "
+        "must be preserved"
+    )
+
+    # (3) simulate_command's stdout is byte-identical to run_command's for
+    # the same input.
+    structured_stdout = simulate_command(command)["stdout"]
+    assert structured_stdout.encode("utf-8") == legacy_output.encode("utf-8"), (
+        "REQ-0C50BE10F3 (ACCEPT-001): simulate_command's stdout must be "
+        "byte-identical to run_command's stdout"
+    )
