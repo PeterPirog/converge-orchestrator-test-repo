@@ -519,6 +519,114 @@ def test_redact_secrets_duplicate_values_in_list() -> None:
     assert "[REDACTED]" not in clean
 
 
+def test_redact_secrets_empty_collection_duplicates_no_log_leak() -> None:
+    """REQ-5C3F7AB352: empty collection, duplicate values, and no log leak (ACCEPT-002).
+
+    Pins the remaining ACCEPT-002 coverage gap: an empty secret collection
+    returns the text byte-identical with no '[REDACTED]' placeholder; a mixed
+    secrets list of repeated values and empty-string values redacts
+    byte-identically to the unique non-empty values; repeated calls with
+    identical input return identical output; and during the call neither the
+    input text nor any supplied secret value is emitted to sys.stdout /
+    sys.stderr. Pure and deterministic: fixed literals and in-memory
+    sys.stdout / sys.stderr capture only; no network, subprocess,
+    os.system / os.popen / os.exec*, environment-variable, or file-system
+    access.
+    """
+    import io
+    import sys
+
+    import shared_tools.fake_terminal as fake_terminal
+
+    redact_secrets = getattr(fake_terminal, "redact_secrets", None)
+    assert redact_secrets is not None, (
+        "REQ-5C3F7AB352: redact_secrets helper must exist (ACCEPT-002)"
+    )
+
+    text = "api_key=sk-abc123 user=bob token=sk-abc123"
+    sentinel = "sk-abc123"
+
+    # (a) An empty secret collection returns the text byte-identical, with
+    # no '[REDACTED]' placeholder inserted.
+    empty_result = redact_secrets(text, [])
+    assert empty_result == text, (
+        "REQ-5C3F7AB352: an empty secret collection must return the text "
+        "byte-identical"
+    )
+    assert empty_result.encode("utf-8") == text.encode("utf-8"), (
+        "REQ-5C3F7AB352: an empty secret collection must preserve the text "
+        "byte-for-byte"
+    )
+    assert "[REDACTED]" not in empty_result, (
+        "REQ-5C3F7AB352: an empty secret collection must insert no "
+        "'[REDACTED]' placeholder"
+    )
+
+    # (b) A mixed secrets list of repeated values and empty-string values
+    # redacts byte-identically to the unique non-empty values.
+    mixed = redact_secrets(text, [sentinel, "", sentinel, "hunter2", ""])
+    unique = redact_secrets(text, [sentinel, "hunter2"])
+    assert mixed == unique, (
+        "REQ-5C3F7AB352: repeated and empty-string secret values must "
+        "redact byte-identically to the unique non-empty values"
+    )
+    assert mixed.encode("utf-8") == unique.encode("utf-8"), (
+        "REQ-5C3F7AB352: repeated and empty-string secret values must "
+        "redact byte-identically to the unique non-empty values"
+    )
+    assert mixed == "api_key=[REDACTED] user=bob token=[REDACTED]", (
+        "REQ-5C3F7AB352: the duplicate-plus-empty-value mixed list must "
+        "redact to the exact literal '[REDACTED]' output"
+    )
+    assert sentinel not in mixed
+    assert "hunter2" not in mixed
+
+    # (c) Deterministic: repeated calls with identical input return identical
+    # output.
+    for _ in range(3):
+        assert redact_secrets(text, [sentinel, "", sentinel, "hunter2", ""]) == mixed, (
+            "REQ-5C3F7AB352: repeated calls with identical input must return "
+            "identical output"
+        )
+
+    # (d) No log leak: during the call, neither the input text nor any
+    # supplied secret value is emitted to sys.stdout / sys.stderr.
+    captured_out = io.StringIO()
+    captured_err = io.StringIO()
+    original_out, original_err = sys.stdout, sys.stderr
+    try:
+        sys.stdout = captured_out
+        sys.stderr = captured_err
+        redact_secrets(text, [sentinel, "", sentinel, "hunter2", ""])
+    finally:
+        sys.stdout = original_out
+        sys.stderr = original_err
+
+    leaked_out = captured_out.getvalue()
+    leaked_err = captured_err.getvalue()
+    assert leaked_out == "", (
+        "REQ-5C3F7AB352: redact_secrets must not emit anything to "
+        "sys.stdout"
+    )
+    assert leaked_err == "", (
+        "REQ-5C3F7AB352: redact_secrets must not emit anything to "
+        "sys.stderr"
+    )
+    assert text not in leaked_out and text not in leaked_err, (
+        "REQ-5C3F7AB352: the input text must not be logged to "
+        "sys.stdout/sys.stderr"
+    )
+    for secret in (sentinel, "hunter2"):
+        assert secret not in leaked_out, (
+            "REQ-5C3F7AB352: no supplied secret value may be logged to "
+            f"sys.stdout ({secret!r} found)"
+        )
+        assert secret not in leaked_err, (
+            "REQ-5C3F7AB352: no supplied secret value may be logged to "
+            f"sys.stderr ({secret!r} found)"
+        )
+
+
 def test_req_f92ffc55ba_provides_additive_structured_public_function() -> None:
     """REQ-F92FFC55BA: additive public function for structured command simulation (ACCEPT-001).
 
