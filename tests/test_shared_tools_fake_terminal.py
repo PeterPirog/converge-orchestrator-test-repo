@@ -245,6 +245,41 @@ def test_redact_secrets_contract_exact_literal_empty_ignored_repeated() -> None:
             "identical output"
         )
 
+    # (e) Three adjacent occurrences of the same secret are each replaced by
+    # the exact literal '[REDACTED]', with exactly three occurrences of the
+    # literal and no trace of the secret.
+    adjacent_text = fixture + fixture + fixture
+    adjacent_result = redact_secrets(adjacent_text, [fixture])
+    assert adjacent_result == "[REDACTED][REDACTED][REDACTED]", (
+        "REQ-A59E470230: three adjacent occurrences of a secret must each be "
+        "replaced by the exact literal '[REDACTED]'"
+    )
+    assert adjacent_result.count("[REDACTED]") == 3, (
+        "REQ-A59E470230: exactly three occurrences of the exact literal "
+        "'[REDACTED]' must appear for three adjacent secret occurrences"
+    )
+    assert fixture not in adjacent_result, (
+        "REQ-A59E470230: no trace of the secret may remain after adjacent "
+        "redaction"
+    )
+
+    # (f) Occurrences spanning both text boundaries (at the very start and the
+    # very end of the text) are each replaced by the exact literal
+    # '[REDACTED]'.
+    boundary_text = f"{fixture} middle {fixture}"
+    boundary_result = redact_secrets(boundary_text, [fixture])
+    assert boundary_result == "[REDACTED] middle [REDACTED]", (
+        "REQ-A59E470230: occurrences at the start and end boundaries of the "
+        "text must each be replaced by the exact literal '[REDACTED]'"
+    )
+    assert boundary_result.count("[REDACTED]") == 2, (
+        "REQ-A59E470230: exactly two occurrences of the exact literal "
+        "'[REDACTED]' must appear for start/end boundary occurrences"
+    )
+    assert boundary_result.startswith("[REDACTED]")
+    assert boundary_result.endswith("[REDACTED]")
+    assert fixture not in boundary_result
+
 
 def test_redact_secrets_overlapping_secrets_order_independent() -> None:
     """REQ-CF0D222BF0: overlapping secrets redact identically in any order (ACCEPT-002).
