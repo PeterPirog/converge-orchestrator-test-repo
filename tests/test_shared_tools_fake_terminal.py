@@ -448,6 +448,41 @@ def test_req_0320ab815a_redact_secrets_never_reads_external_state() -> None:
     )
 
 
+def test_req_0320ab815a_redact_secrets_file_canary_never_created() -> None:
+    """REQ-0320AB815A: redact_secrets performs no file-system side effects (ACCEPT-002).
+
+    Proven deterministically: a fixed-literal canary path is cleared before
+    the call, so the post-call check depends solely on redact_secrets. No
+    network, subprocess, or process-state access; the only file-system touch
+    is the fixed-literal canary path.
+    """
+    import os
+
+    from shared_tools.fake_terminal import redact_secrets
+
+    canary = "/tmp/never_created_0320ab815a"
+
+    # Determinism: clear any pre-existing canary so the post-call check
+    # depends only on redact_secrets, not on prior host state.
+    if os.path.exists(canary):
+        os.remove(canary)
+
+    result = redact_secrets("api_key=sk-abc123 user=bob token=sk-abc123", ["sk-abc123", ""])
+
+    # (1) The fixed input redacts to the exact deterministic output.
+    assert result == "api_key=[REDACTED] user=bob token=[REDACTED]", (
+        "REQ-0320AB815A FILE-CANARY-NEVER-CREATED: the fixed input must "
+        "redact to the exact deterministic output"
+    )
+
+    # (2) Side-effect canary: redact_secrets must never create the canary
+    # file, so it must not exist after the call returned.
+    assert not os.path.exists(canary), (
+        "REQ-0320AB815A FILE-CANARY-NEVER-CREATED: the canary file must "
+        "never be created by redact_secrets"
+    )
+
+
 def test_redact_secrets_duplicate_values_in_list() -> None:
     """REQ-5C3F7AB352: duplicate secret values in the input list (ACCEPT-002).
 
