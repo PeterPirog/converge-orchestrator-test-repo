@@ -285,10 +285,13 @@ def test_redact_secrets_overlapping_secrets_order_independent() -> None:
     """REQ-CF0D222BF0: overlapping secrets redact identically in any order (ACCEPT-002).
 
     Supplying overlapping secret values (one occurring within the other) must
-    yield identical redacted output regardless of the supplied iteration order.
-    Pure and deterministic: it inspects only the already-imported helper and
-    performs no subprocess, os.system / os.popen / os.exec*, network,
-    environment-variable, file-system, or process-state access.
+    yield identical redacted output regardless of the supplied iteration
+    order, and that output is pinned to the exact literal ``[REDACTED]``. The
+    inputs are exercised as a list in both orderings and as a set (hash
+    iteration order). Pure and deterministic: it inspects only the
+    already-imported helper and performs no subprocess, os.system / os.popen /
+    os.exec*, network, environment-variable, file-system, or process-state
+    access.
     """
     import shared_tools.fake_terminal as fake_terminal
 
@@ -300,10 +303,31 @@ def test_redact_secrets_overlapping_secrets_order_independent() -> None:
     # Overlapping secrets: 'bc' occurs within 'abc'.
     first = redact_secrets("abc", ["abc", "bc"])
     second = redact_secrets("abc", ["bc", "abc"])
+    as_set = redact_secrets("abc", {"abc", "bc"})
 
+    # Relative order-independence: the list orderings agree with one another.
     assert first == second, (
         "REQ-CF0D222BF0: overlapping inputs must produce deterministic output "
         "independent of set/hash iteration order"
+    )
+
+    # Absolute pin: the text is fully covered by the longer overlapping
+    # secret, so every ordering — both list orders and the set / hash
+    # iteration order — must redact it to the exact literal '[REDACTED]'.
+    assert first == "[REDACTED]", (
+        "REQ-CF0D222BF0 SET-HASH-ORDER-ABSOLUTE-PIN: overlapping inputs "
+        "supplied as a list in the first ordering must redact to the exact "
+        f"literal '[REDACTED]'; got {first!r}"
+    )
+    assert second == "[REDACTED]", (
+        "REQ-CF0D222BF0 SET-HASH-ORDER-ABSOLUTE-PIN: overlapping inputs "
+        "supplied as a list in the second ordering must redact to the exact "
+        f"literal '[REDACTED]'; got {second!r}"
+    )
+    assert as_set == "[REDACTED]", (
+        "REQ-CF0D222BF0 SET-HASH-ORDER-ABSOLUTE-PIN: overlapping inputs "
+        "supplied as a set (hash iteration order) must redact to the exact "
+        f"literal '[REDACTED]'; got {as_set!r}"
     )
 
 
