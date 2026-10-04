@@ -256,3 +256,30 @@ def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
     assert result == baseline
     assert canary_secret not in result
     assert calls == []
+
+
+def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
+    """ACCEPT-002 (REQ-5C3F7AB352): redact_secrets never logs input text or secret values.
+
+    The helper performs only in-process string replacement. Even when a secret
+    occurs repeatedly or empty/``None`` secrets are present, the original text
+    and every non-empty secret value must never appear on stdout or stderr.
+    """
+    from shared_tools.fake_terminal import redact_secrets
+
+    secret = "hunter2"
+    text = f"user=alice pass={secret} token={secret}"
+    secrets = [secret, "", None]
+
+    result = redact_secrets(text, secrets)
+
+    expected = "user=alice pass=[REDACTED] token=[REDACTED]"
+    assert result == expected
+
+    captured = capsys.readouterr()
+    assert text not in captured.out, "input text leaked to stdout"
+    assert secret not in captured.out, "secret value leaked to stdout"
+    assert text not in captured.err, "input text leaked to stderr"
+    assert secret not in captured.err, "secret value leaked to stderr"
+
+    assert redact_secrets(text, secrets) == result
