@@ -187,3 +187,24 @@ def test_redact_secrets_repeated_occurrences_req_a59e470230() -> None:
     assert "secret_one" not in result
     assert "secret_two" not in result
     assert redact_secrets(text, secrets) == result
+
+
+def test_redact_secrets_overlapping_inputs_iteration_order_req_cf0d222bf0() -> None:
+    """ACCEPT-002 (REQ-CF0D222BF0): overlapping secrets produce deterministic output.
+
+    The same overlapping secret contents, passed as an ordered list, a reversed
+    list, or a set, must redact to identical output regardless of the iteration
+    order of the collection.
+    """
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = "start=abcdef end=xyz"
+    secrets = ["abc", "bcd"]
+
+    result_forward = redact_secrets(text, secrets)
+    result_reverse = redact_secrets(text, list(reversed(secrets)))
+    result_set = redact_secrets(text, set(secrets))
+
+    assert result_forward == result_reverse == result_set, (
+        "REQ-CF0D222BF0 overlapping-secret output depends on iteration order"
+    )

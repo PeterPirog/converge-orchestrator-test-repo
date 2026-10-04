@@ -27,7 +27,10 @@ def redact_secrets(text: str, secrets) -> str:
     replacement is performed in-process using only string operations so the
     result is deterministic for identical inputs.
     """
-    for secret in secrets:
-        if secret:
-            text = text.replace(secret, "[REDACTED]")
+    ordered = sorted(
+        (secret for secret in secrets if secret),
+        key=lambda secret: (-len(secret), secret),
+    )
+    for secret in ordered:
+        text = text.replace(secret, "[REDACTED]")
     return text
