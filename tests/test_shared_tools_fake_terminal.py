@@ -2,7 +2,7 @@ import inspect
 import types
 
 import shared_tools.fake_terminal as _ft_module
-from shared_tools.fake_terminal import format_output, run_command
+from shared_tools.fake_terminal import format_output, run_command, simulate_command
 
 
 # Intentionally broad: any reference to subprocess/os/spawn/exec/eval or common
@@ -40,6 +40,24 @@ def test_simulate_command_structured_simulation_req_f92ffc55ba() -> None:
     assert isinstance(result, dict)
     assert result["stdout"] == run_command(command)
     # command text is inert data: no real execution, deterministic fake output
+    assert simulate_command("rm -rf /")["stdout"].startswith("[SIMULATED] Executing:")
+
+
+def test_simulate_command_structured_simulation_req_0c50be10f3() -> None:
+    """ACCEPT-001 / REQ-0C50BE10F3: structured command simulation returns a
+    dict whose stdout mirrors run_command and whose command string is inert.
+    """
+    command = "ls -la"
+    result = simulate_command(command)
+
+    assert isinstance(result, dict)
+    assert set(result.keys()) == {"stdout"}
+    assert result["stdout"] == run_command(command)
+    assert result["stdout"] == (
+        f"[SIMULATED] Executing: {command}\n"
+        "[SIMULATED] Output placeholder"
+    )
+    # command string is inert: dangerous-looking input still yields only simulated wrapper output
     assert simulate_command("rm -rf /")["stdout"].startswith("[SIMULATED] Executing:")
 
 
