@@ -121,6 +121,21 @@ def test_redact_secrets_non_empty_occurrences_req_85c52948b7() -> None:
     )
 
 
+def test_redact_secrets_repeated_occurrences_and_empty_ignored_req_a59e470230() -> None:
+    """ACCEPT-002 / REQ-A59E470230: redact_secrets replaces every occurrence of
+    each supplied secret (including repeated occurrences) with the exact literal
+    [REDACTED], while empty values and None are ignored.
+    """
+    redact_secrets = getattr(_ft_module, "redact_secrets", None)
+    assert redact_secrets is not None, "REQ-A59E470230 redact_secrets helper missing"
+
+    text = "secret=ALPHA secret=ALPHA secret=BETA and secret=ALPHA again"
+    secrets = ["secret=ALPHA", "secret=BETA", "", None]
+    assert redact_secrets(text, secrets) == (
+        "[REDACTED] [REDACTED] [REDACTED] and [REDACTED] again"
+    )
+
+
 def test_fake_terminal_code_objects_reference_no_subprocess_or_os_shell_execution_globals() -> None:
     """REQ-879DB2129D: compiled code objects must not reference subprocess/os/shell globals."""
     seen: set[int] = set()
