@@ -208,3 +208,51 @@ def test_redact_secrets_overlapping_inputs_iteration_order_req_cf0d222bf0() -> N
     assert result_forward == result_reverse == result_set, (
         "REQ-CF0D222BF0 overlapping-secret output depends on iteration order"
     )
+
+
+def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
+    """ACCEPT-002 (REQ-0320AB815A): redact_secrets reads zero external state.
+
+    Output is derived solely from the ``text`` and ``secrets`` arguments.
+    Environment variables, files, network sockets, and process state are not
+    consulted, so seeding them with a secret must not alter the result.
+    """
+    import builtins
+    import os
+    import socket
+    import urllib.request
+
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = "user=alice pass=hunter2"
+    secrets = ["hunter2"]
+    baseline = redact_secrets(text, secrets)
+
+    canary_secret = "ENV_FILE_SEED_0320AB815A"
+    monkeypatch.setenv("REDACT_CANARY_0320AB815A", canary_secret)
+    canary_path = tmp_path / "secrets.txt"
+    canary_path.write_text(canary_secret, encoding="utf-8")
+
+    calls = []
+
+    def wrap(original, label):
+        def wrapper(*args, **kwargs):
+            calls.append(label)
+            return original(*args, **kwargs)
+
+        return wrapper
+
+    monkeypatch.setattr(os, "getenv", wrap(os.getenv, "os.getenv"))
+    monkeypatch.setattr(os.environ, "get", wrap(os.environ.get, "os.environ.get"))
+    monkeypatch.setattr(os, "getpid", wrap(os.getpid, "os.getpid"))
+    monkeypatch.setattr(builtins, "open", wrap(builtins.open, "builtins.open"))
+    monkeypatch.setattr(socket, "socket", wrap(socket.socket, "socket.socket"))
+    monkeypatch.setattr(
+        urllib.request, "urlopen", wrap(urllib.request.urlopen, "urllib.request.urlopen")
+    )
+
+    result = redact_secrets(text, secrets)
+
+    assert result == baseline
+    assert canary_secret not in result
+    assert calls == []
