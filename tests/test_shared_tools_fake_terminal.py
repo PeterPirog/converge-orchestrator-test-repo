@@ -35,6 +35,39 @@ def test_format_output_wraps_terminal_fence() -> None:
     assert format_output("line one\nline two") == "```terminal\nline one\nline two\n```"
 
 
+def test_simulate_command_structured_simulation_req_0c50be10f3() -> None:
+    """ACCEPT-001 (REQ-0C50BE10F3): simulate_command returns deterministic structured output.
+
+    The simulated output field mirrors run_command byte-for-byte, and hostile
+    command strings are treated as inert data, producing only wrapper output.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    command = "ls -la"
+    result = simulate_command(command)
+
+    assert isinstance(result, dict)
+    assert result["command"] == command
+    assert result["simulated"] is True
+    assert result["output"] == run_command(command)
+    assert result["output"] == (
+        "[SIMULATED] Executing: ls -la\n"
+        "[SIMULATED] Output placeholder"
+    )
+
+    # Hostile input must be inert data, not executed.
+    hostile = "rm -rf /"
+    hostile_result = simulate_command(hostile)
+    assert isinstance(hostile_result, dict)
+    assert hostile_result["command"] == hostile
+    assert hostile_result["simulated"] is True
+    assert hostile_result["output"].startswith("[SIMULATED] Executing:")
+
+    # Determinism
+    assert simulate_command(command) == result
+    assert simulate_command(hostile) == hostile_result
+
+
 def test_fake_terminal_is_pure_in_process_simulator() -> None:
     """AST + namespace guard: fake_terminal.py performs no process execution."""
     import ast
