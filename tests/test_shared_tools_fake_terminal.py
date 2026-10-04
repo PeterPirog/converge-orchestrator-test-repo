@@ -113,3 +113,27 @@ def test_fake_terminal_is_pure_in_process_simulator() -> None:
 
     exported = {name for name in dir(fake_terminal) if not name.startswith("_")}
     assert not (exported & banned_names), f"banned names in public API: {exported & banned_names}"
+
+
+def test_simulate_command_structured_simulation_req_413a5b74fd() -> None:
+    """ACCEPT-001 (REQ-413A5B74FD): command text is inert data in simulate_command."""
+    import os
+
+    from shared_tools.fake_terminal import simulate_command
+
+    payload = "touch /tmp/never_created_413a5b74fd && echo INJECTED"
+    canary = "/tmp/never_created_413a5b74fd"
+
+    # Deterministic pre-call clear: remove any leftover canary from an aborted run.
+    if os.path.exists(canary):
+        os.remove(canary)
+
+    result = simulate_command(payload)
+
+    assert isinstance(result, dict)
+    assert set(result) == {"command", "simulated", "output"}
+    assert result["command"] == payload
+    assert result["simulated"] is True
+    assert result["output"] == run_command(payload)
+    assert result["output"].startswith("[SIMULATED] Executing:")
+    assert not os.path.exists(canary)
