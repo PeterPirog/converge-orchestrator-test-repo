@@ -61,6 +61,32 @@ def test_simulate_command_structured_simulation_req_0c50be10f3() -> None:
     assert simulate_command("rm -rf /")["stdout"].startswith("[SIMULATED] Executing:")
 
 
+def test_simulate_command_structured_simulation_req_413a5b74fd() -> None:
+    """ACCEPT-001 / REQ-413A5B74FD: structured command simulation returns a
+    dict with exactly stdout mirroring run_command, and command text is inert data.
+    """
+    import os
+
+    command = "ls -la"
+    result = simulate_command(command)
+
+    assert isinstance(result, dict)
+    assert set(result.keys()) == {"stdout"}
+    assert result["stdout"] == run_command(command)
+
+    # Inert command text: an injection payload that would create a canary file
+    # if executed is treated purely as data; output stays the simulated wrapper.
+    canary = "/tmp/opencode/simulate_command_injection_canary"
+    assert not os.path.exists(canary), "canary already exists before test"
+    injection = f"touch {canary}"
+    injected = simulate_command(injection)
+    assert isinstance(injected, dict)
+    assert set(injected.keys()) == {"stdout"}
+    assert injected["stdout"] == run_command(injection)
+    assert injected["stdout"].startswith("[SIMULATED] Executing:")
+    assert not os.path.exists(canary), "simulate_command executed the injection payload"
+
+
 def _iter_code_objects(code: types.CodeType):
     yield code
     for const in code.co_consts:
