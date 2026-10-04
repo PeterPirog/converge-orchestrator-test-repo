@@ -18,3 +18,16 @@ def simulate_command(command: str) -> dict:
 def format_output(output: str) -> str:
     """Format terminal output for display."""
     return f"```terminal\n{output}\n```"
+
+
+def redact_secrets(text: str, secrets) -> str:
+    """Return ``text`` with every non-empty secret value replaced by '[REDACTED]'.
+
+    Empty strings and ``None`` entries in ``secrets`` are ignored. The
+    replacement is performed in-process using only string operations so the
+    result is deterministic for identical inputs.
+    """
+    for secret in secrets:
+        if secret:
+            text = text.replace(secret, "[REDACTED]")
+    return text

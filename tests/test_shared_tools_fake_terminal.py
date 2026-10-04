@@ -115,6 +115,28 @@ def test_fake_terminal_is_pure_in_process_simulator() -> None:
     assert not (exported & banned_names), f"banned names in public API: {exported & banned_names}"
 
 
+def test_redact_secrets_non_empty_occurrences_req_85c52948b7() -> None:
+    """ACCEPT-002 (REQ-85C52948B7): redact_secrets replaces every non-empty
+    secret value in text with the fixed literal '[REDACTED]'.
+
+    Empty and None secret values are ignored deterministically; repeated calls
+    with identical inputs return identical output.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    redact_secrets = getattr(fake_terminal, "redact_secrets", None)
+    assert redact_secrets is not None, "REQ-85C52948B7 redact_secrets helper missing"
+
+    text = "password=abc123 token=xyz789"
+    secrets = ["abc123", "", "xyz789", None]
+    result = redact_secrets(text, secrets)
+
+    assert result == "password=[REDACTED] token=[REDACTED]"
+    assert "abc123" not in result
+    assert "xyz789" not in result
+    assert redact_secrets(text, secrets) == result
+
+
 def test_simulate_command_structured_simulation_req_413a5b74fd() -> None:
     """ACCEPT-001 (REQ-413A5B74FD): command text is inert data in simulate_command."""
     import os
