@@ -107,6 +107,20 @@ def _module_top_level_code(module: types.ModuleType) -> types.CodeType | None:
     return None
 
 
+def test_redact_secrets_non_empty_occurrences_req_85c52948b7() -> None:
+    """REQ-85C52948B7: deterministic pure redact_secrets replaces every
+    non-empty supplied secret occurrence in text with a fixed [REDACTED] marker.
+    """
+    redact_secrets = getattr(_ft_module, "redact_secrets", None)
+    assert redact_secrets is not None, "REQ-85C52948B7 redact_secrets helper missing"
+
+    text = "api-key=abc123 and token=xyz plus api-key=abc123"
+    secrets = ["api-key=abc123", "xyz", "", None, "never-appears"]
+    assert redact_secrets(text, secrets) == (
+        "[REDACTED] and token=[REDACTED] plus [REDACTED]"
+    )
+
+
 def test_fake_terminal_code_objects_reference_no_subprocess_or_os_shell_execution_globals() -> None:
     """REQ-879DB2129D: compiled code objects must not reference subprocess/os/shell globals."""
     seen: set[int] = set()
