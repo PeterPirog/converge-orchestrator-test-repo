@@ -159,3 +159,31 @@ def test_simulate_command_structured_simulation_req_413a5b74fd() -> None:
     assert result["output"] == run_command(payload)
     assert result["output"].startswith("[SIMULATED] Executing:")
     assert not os.path.exists(canary)
+
+
+def test_redact_secrets_repeated_occurrences_req_a59e470230() -> None:
+    """ACCEPT-002 (REQ-A59E470230): redact_secrets replaces every repeated
+    occurrence of each secret with the exact literal '[REDACTED]'.
+
+    Empty strings and ``None`` entries are ignored and never alter the text.
+    Repeated occurrences of the same secret are all redacted deterministically.
+    """
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = (
+        "alpha=secret_one beta=secret_two "
+        "gamma=secret_one delta=secret_two "
+        "epsilon=secret_one"
+    )
+    secrets = ["secret_one", None, "", "secret_two", ""]
+    result = redact_secrets(text, secrets)
+
+    assert result == (
+        "alpha=[REDACTED] beta=[REDACTED] "
+        "gamma=[REDACTED] delta=[REDACTED] "
+        "epsilon=[REDACTED]"
+    )
+    assert result.count("[REDACTED]") == 5
+    assert "secret_one" not in result
+    assert "secret_two" not in result
+    assert redact_secrets(text, secrets) == result
