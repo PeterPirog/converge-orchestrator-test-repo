@@ -132,6 +132,36 @@ def test_summarize_simulation_req_f92ffc55ba() -> None:
     assert summarize_simulation(simulation) == result
 
 
+def test_summarize_simulation_is_additive_public_helper_req_f92ffc55ba() -> None:
+    """ACCEPT-001 (REQ-F92FFC55BA): summarize_simulation is an additive public
+    helper that derives a deterministic, fixed-structure summary from a
+    simulate_command result.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    summarize_simulation = getattr(fake_terminal, "summarize_simulation", None)
+    assert summarize_simulation is not None, "REQ-F92FFC55BA summary helper missing"
+
+    # Additive: existing public helpers remain present.
+    public_helpers = {"run_command", "simulate_command", "format_output", "redact_secrets"}
+    assert public_helpers.issubset(set(dir(fake_terminal))), (
+        "REQ-F92FFC55BA summarize_simulation is not additive"
+    )
+
+    command = "echo SHOULD_NOT_RUN"
+    simulation = fake_terminal.simulate_command(command)
+    result = summarize_simulation(simulation)
+
+    assert isinstance(result, dict)
+    assert set(result) == {"command", "simulated", "summary"}
+    assert result == {
+        "command": command,
+        "simulated": True,
+        "summary": f"[SUMMARY] {command}",
+    }
+    assert summarize_simulation(simulation) == result
+
+
 def test_summarize_simulation_inert_command_text_req_413a5b74fd() -> None:
     """ACCEPT-001 (REQ-413A5B74FD): summarize_simulation treats command text as inert data.
 
