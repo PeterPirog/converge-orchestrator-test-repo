@@ -47,6 +47,7 @@ def test_simulate_command_structured_simulation_req_0c50be10f3() -> None:
     result = simulate_command(command)
 
     assert isinstance(result, dict)
+    assert set(result) == {"command", "simulated", "output"}
     assert result["command"] == command
     assert result["simulated"] is True
     assert result["output"] == run_command(command)
@@ -59,6 +60,7 @@ def test_simulate_command_structured_simulation_req_0c50be10f3() -> None:
     hostile = "rm -rf /"
     hostile_result = simulate_command(hostile)
     assert isinstance(hostile_result, dict)
+    assert set(hostile_result) == {"command", "simulated", "output"}
     assert hostile_result["command"] == hostile
     assert hostile_result["simulated"] is True
     assert hostile_result["output"].startswith("[SIMULATED] Executing:")
