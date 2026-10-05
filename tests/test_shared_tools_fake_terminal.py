@@ -132,6 +132,44 @@ def test_summarize_simulation_req_f92ffc55ba() -> None:
     assert summarize_simulation(simulation) == result
 
 
+def test_summarize_simulation_inert_command_text_req_413a5b74fd() -> None:
+    """ACCEPT-001 (REQ-413A5B74FD): summarize_simulation treats command text as inert data.
+
+    Fixed {command, simulated, summary} structure, hostile strings wrapped only
+    in [SUMMARY], and repeat-call determinism.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    summarize_simulation = fake_terminal.summarize_simulation
+
+    # Hostile payload preserves structure and wraps command text inertly.
+    hostile = "rm -rf /"
+    sim = fake_terminal.simulate_command(hostile)
+    result = summarize_simulation(sim)
+
+    assert isinstance(result, dict)
+    assert result == {
+        "command": hostile,
+        "simulated": True,
+        "summary": f"[SUMMARY] {hostile}",
+    }
+    assert set(result) == {"command", "simulated", "summary"}
+    assert result["summary"].startswith("[SUMMARY]")
+
+    # Command text appears exactly once, inside the [SUMMARY] wrapper only.
+    assert hostile in result["summary"]
+    assert result["summary"].count(hostile) == 1
+
+    # No simulation wrapper tokens or executable-style output leak into summary.
+    assert "[SIMULATED]" not in result["summary"]
+    simulation_output = fake_terminal.run_command(hostile)
+    assert simulation_output not in result.values()
+    assert simulation_output not in result["summary"]
+
+    # Repeat-call determinism.
+    assert summarize_simulation(sim) == result
+
+
 def test_fake_terminal_is_pure_in_process_simulator() -> None:
     """AST + namespace guard: fake_terminal.py performs no process execution."""
     import ast
