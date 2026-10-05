@@ -484,3 +484,49 @@ def test_no_process_execution_apis_req_879db2129d(tmp_path):
     assert result == expected, "REQ-879DB2129D shell payload must produce deterministic wrapper output"
     assert not canary.exists(), "REQ-879DB2129D canary file must not be created"
     assert simulate_command(payload) == result, "REQ-879DB2129D simulate_command must be deterministic"
+
+
+def test_run_command_public_api_preserved_req_0c50be10f3() -> None:
+    """ACCEPT-001 (REQ-0C50BE10F3): run_command(command: str) -> str public API is preserved.
+
+    The function exposes exactly one positional-or-keyword parameter named
+    ``command`` annotated as ``str`` and returns ``str``. Legacy deterministic
+    inert output for the pinned command ``echo SHOULD_NOT_RUN`` remains stable,
+    and ``simulate_command(command)['output']`` matches ``run_command(command)``
+    byte-for-byte.
+    """
+    import inspect
+    import typing
+
+    from shared_tools.fake_terminal import run_command, simulate_command
+
+    # Signature: single positional-or-keyword parameter named "command".
+    sig = inspect.signature(run_command)
+    params = list(sig.parameters.values())
+    assert len(params) == 1
+    param = params[0]
+    assert param.name == "command"
+    assert param.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+
+    # Annotations: command -> str and return -> str.
+    assert run_command.__annotations__["command"] is str
+    assert run_command.__annotations__["return"] is str
+    hints = typing.get_type_hints(run_command)
+    assert hints.get("command") is str
+    assert hints.get("return") is str
+
+    # Legacy-pinned deterministic inert output for "echo SHOULD_NOT_RUN".
+    command = "echo SHOULD_NOT_RUN"
+    expected = (
+        "[SIMULATED] Executing: echo SHOULD_NOT_RUN\n"
+        "[SIMULATED] Output placeholder"
+    )
+    positional_result = run_command(command)
+    keyword_result = run_command(command=command)
+    assert positional_result == expected
+    assert keyword_result == expected
+    assert simulate_command(command)["output"] == run_command(command)
+    assert simulate_command(command)["output"] == expected
+
+    # Repeat-call determinism.
+    assert run_command(command) == positional_result
