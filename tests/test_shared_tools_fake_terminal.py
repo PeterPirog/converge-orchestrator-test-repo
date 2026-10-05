@@ -68,6 +68,28 @@ def test_simulate_command_structured_simulation_req_0c50be10f3() -> None:
     assert simulate_command(hostile) == hostile_result
 
 
+def test_summarize_simulation_req_f92ffc55ba() -> None:
+    """ACCEPT-001 (REQ-F92FFC55BA): summarize_simulation derives a deterministic,
+    fixed-structure summary from a simulate_command result.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    summarize_simulation = getattr(fake_terminal, "summarize_simulation", None)
+    assert summarize_simulation is not None, "REQ-F92FFC55BA summary helper missing"
+
+    command = "echo SHOULD_NOT_RUN"
+    simulation = fake_terminal.simulate_command(command)
+    result = summarize_simulation(simulation)
+
+    assert isinstance(result, dict)
+    assert result == {
+        "command": command,
+        "simulated": True,
+        "summary": f"[SUMMARY] {command}",
+    }
+    assert summarize_simulation(simulation) == result
+
+
 def test_fake_terminal_is_pure_in_process_simulator() -> None:
     """AST + namespace guard: fake_terminal.py performs no process execution."""
     import ast
