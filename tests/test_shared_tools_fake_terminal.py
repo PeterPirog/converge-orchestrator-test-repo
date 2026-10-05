@@ -305,3 +305,67 @@ def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
     assert secret not in captured.err, "secret value leaked to stderr"
 
     assert redact_secrets(text, secrets) == result
+
+
+def test_no_process_execution_apis_req_879db2129d(tmp_path):
+    """REQ-879DB2129D: fake_terminal.py contains no process-execution APIs."""
+    import ast
+    import inspect
+    import pathlib
+
+    import shared_tools.fake_terminal as fake_terminal
+
+    source_path = pathlib.Path(inspect.getfile(fake_terminal))
+    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+
+    banned_modules = {"subprocess", "sh", "pty", "multiprocessing"}
+    banned_names = {
+        "system", "popen", "getoutput", "getstatusoutput", "posix_spawn", "posix_spawnp",
+        "spawn", "spawnl", "spawnle", "spawnlp", "spawnlpe", "spawnv", "spawnve", "spawnvp", "spawnvpe",
+        "exec", "execl", "execle", "execlp", "execlpe", "execv", "execve", "execvp", "execvpe", "execfile", "eval",
+        "fork", "forkpty", "kill", "Popen", "CreateProcess",
+        "create_subprocess_exec", "create_subprocess_shell", "run", "call", "check_call", "check_output",
+    }
+
+    violations = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] in banned_modules:
+                    violations.append(f"REQ-879DB2129D banned import: {alias.name}")
+        elif isinstance(node, ast.ImportFrom):
+            mod = (node.module or "").split(".")[0]
+            if mod in banned_modules:
+                violations.append(f"REQ-879DB2129D banned import from: {node.module}")
+            for alias in node.names:
+                if alias.name in banned_names:
+                    violations.append(f"REQ-879DB2129D banned name: {alias.name}")
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Name) and func.id in banned_names:
+                violations.append(f"REQ-879DB2129D banned call: {func.id}")
+            elif isinstance(func, ast.Attribute):
+                if func.attr in banned_names:
+                    violations.append(f"REQ-879DB2129D banned attr: {func.attr}")
+                if isinstance(func.value, ast.Name):
+                    if func.value.id in banned_modules:
+                        violations.append(f"REQ-879DB2129D banned module call: {func.value.id}.{func.attr}")
+                    if func.value.id == "os" and func.attr in {"system", "popen", "getoutput", "getstatusoutput"}:
+                        violations.append(f"REQ-879DB2129D banned os call: {func.attr}")
+
+    assert not violations, "REQ-879DB2129D AST guard failure: " + "; ".join(violations)
+
+    from shared_tools.fake_terminal import simulate_command
+
+    canary = tmp_path / "req_879db2129d_canary"
+    payload = f"echo $(touch {canary}) `touch {canary}` | cat && touch {canary}"
+    result = simulate_command(payload)
+    expected = {
+        "command": payload,
+        "simulated": True,
+        "output": f"[SIMULATED] Executing: {payload}\n[SIMULATED] Output placeholder",
+    }
+
+    assert result == expected, "REQ-879DB2129D shell payload must produce deterministic wrapper output"
+    assert not canary.exists(), "REQ-879DB2129D canary file must not be created"
+    assert simulate_command(payload) == result, "REQ-879DB2129D simulate_command must be deterministic"
