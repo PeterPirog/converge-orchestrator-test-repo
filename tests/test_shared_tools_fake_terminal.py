@@ -68,6 +68,48 @@ def test_simulate_command_structured_simulation_req_0c50be10f3() -> None:
     assert simulate_command(hostile) == hostile_result
 
 
+def test_run_command_deterministic_inert_output_req_0c50be10f3() -> None:
+    """ACCEPT-001 (REQ-0C50BE10F3): run_command returns exact wrapper output.
+
+    The returned string matches simulate_command(command)['output'] byte-for-byte,
+    hostile command strings are treated as inert data, and repeated calls are
+    deterministic.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    command = "ls -la"
+    result = run_command(command)
+
+    assert result == simulate_command(command)["output"]
+    assert result == (
+        "[SIMULATED] Executing: ls -la\n"
+        "[SIMULATED] Output placeholder"
+    )
+
+    # Hostile input must be inert data, not executed.
+    hostile = "rm -rf /"
+    hostile_result = run_command(hostile)
+    assert hostile_result == simulate_command(hostile)["output"]
+    assert hostile_result == (
+        "[SIMULATED] Executing: rm -rf /\n"
+        "[SIMULATED] Output placeholder"
+    )
+
+    # Backtick / command-substitution payloads must be inert data.
+    payload = "echo $(id) `whoami`"
+    payload_result = run_command(payload)
+    assert payload_result == simulate_command(payload)["output"]
+    assert payload_result == (
+        "[SIMULATED] Executing: echo $(id) `whoami`\n"
+        "[SIMULATED] Output placeholder"
+    )
+
+    # Determinism
+    assert run_command(command) == result
+    assert run_command(hostile) == hostile_result
+    assert run_command(payload) == payload_result
+
+
 def test_summarize_simulation_req_f92ffc55ba() -> None:
     """ACCEPT-001 (REQ-F92FFC55BA): summarize_simulation derives a deterministic,
     fixed-structure summary from a simulate_command result.
