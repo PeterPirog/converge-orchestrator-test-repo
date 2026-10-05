@@ -15,6 +15,15 @@ def simulate_command(command: str) -> dict:
     }
 
 
+def summarize_simulation(simulation: dict) -> dict:
+    """Return a deterministic, fixed-structure summary of a simulation."""
+    return {
+        "command": simulation["command"],
+        "simulated": True,
+        "summary": f"[SUMMARY] {simulation['command']}",
+    }
+
+
 def format_output(output: str) -> str:
     """Format terminal output for display."""
     return f"```terminal\n{output}\n```"
