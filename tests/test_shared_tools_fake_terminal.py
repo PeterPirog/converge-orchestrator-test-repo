@@ -418,15 +418,18 @@ def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
 
 
 def test_no_process_execution_apis_req_879db2129d(tmp_path):
-    """REQ-879DB2129D: fake_terminal.py contains no process-execution APIs."""
+    """REQ-879DB2129D: shared_tools modules contain no process-execution APIs.
+
+    The AST guard deterministically scans every *.py module under shared_tools/
+    (sorted by path) and fails if any process-execution API is present.
+    """
     import ast
-    import inspect
     import pathlib
 
-    import shared_tools.fake_terminal as fake_terminal
+    import shared_tools
 
-    source_path = pathlib.Path(inspect.getfile(fake_terminal))
-    tree = ast.parse(source_path.read_text(encoding="utf-8"))
+    package_dir = pathlib.Path(shared_tools.__file__).parent
+    module_paths = sorted(package_dir.glob("*.py"))
 
     banned_modules = {"subprocess", "sh", "pty", "multiprocessing"}
     banned_names = {
@@ -438,30 +441,32 @@ def test_no_process_execution_apis_req_879db2129d(tmp_path):
     }
 
     violations = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name.split(".")[0] in banned_modules:
-                    violations.append(f"REQ-879DB2129D banned import: {alias.name}")
-        elif isinstance(node, ast.ImportFrom):
-            mod = (node.module or "").split(".")[0]
-            if mod in banned_modules:
-                violations.append(f"REQ-879DB2129D banned import from: {node.module}")
-            for alias in node.names:
-                if alias.name in banned_names:
-                    violations.append(f"REQ-879DB2129D banned name: {alias.name}")
-        elif isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Name) and func.id in banned_names:
-                violations.append(f"REQ-879DB2129D banned call: {func.id}")
-            elif isinstance(func, ast.Attribute):
-                if func.attr in banned_names:
-                    violations.append(f"REQ-879DB2129D banned attr: {func.attr}")
-                if isinstance(func.value, ast.Name):
-                    if func.value.id in banned_modules:
-                        violations.append(f"REQ-879DB2129D banned module call: {func.value.id}.{func.attr}")
-                    if func.value.id == "os" and func.attr in {"system", "popen", "getoutput", "getstatusoutput"}:
-                        violations.append(f"REQ-879DB2129D banned os call: {func.attr}")
+    for module_path in module_paths:
+        tree = ast.parse(module_path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split(".")[0] in banned_modules:
+                        violations.append(f"REQ-879DB2129D banned import ({module_path}): {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                mod = (node.module or "").split(".")[0]
+                if mod in banned_modules:
+                    violations.append(f"REQ-879DB2129D banned import from ({module_path}): {node.module}")
+                for alias in node.names:
+                    if alias.name in banned_names:
+                        violations.append(f"REQ-879DB2129D banned name ({module_path}): {alias.name}")
+            elif isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Name) and func.id in banned_names:
+                    violations.append(f"REQ-879DB2129D banned call ({module_path}): {func.id}")
+                elif isinstance(func, ast.Attribute):
+                    if func.attr in banned_names:
+                        violations.append(f"REQ-879DB2129D banned attr ({module_path}): {func.attr}")
+                    if isinstance(func.value, ast.Name):
+                        if func.value.id in banned_modules:
+                            violations.append(f"REQ-879DB2129D banned module call ({module_path}): {func.value.id}.{func.attr}")
+                        if func.value.id == "os" and func.attr in {"system", "popen", "getoutput", "getstatusoutput"}:
+                            violations.append(f"REQ-879DB2129D banned os call ({module_path}): {func.attr}")
 
     assert not violations, "REQ-879DB2129D AST guard failure: " + "; ".join(violations)
 
