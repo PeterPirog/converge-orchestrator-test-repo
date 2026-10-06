@@ -590,3 +590,45 @@ def test_no_process_execution_apis_req_879db2129d(tmp_path):
     assert result == expected, "REQ-879DB2129D shell payload must produce deterministic wrapper output"
     assert not canary.exists(), "REQ-879DB2129D canary file must not be created"
     assert simulate_command(payload) == result, "REQ-879DB2129D simulate_command must be deterministic"
+
+
+def test_run_command_str_legacy_output_mirrors_simulate_command_req_0c50be10f3() -> None:
+    """ACCEPT-001 (REQ-0C50BE10F3): run_command returns str and preserves exact legacy output.
+
+    ``run_command(command)`` is a str that byte-identically mirrors
+    ``simulate_command(command)['output']`` for benign and hostile payloads,
+    and repeated calls return the same deterministic value.  All command text
+    is treated as inert data.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    payloads = [
+        "ls -la",
+        "rm -rf /",
+        "echo $(id) `whoami`",
+    ]
+
+    for command in payloads:
+        result = run_command(command)
+
+        assert isinstance(result, str), f"run_command({command!r}) must return str"
+
+        structured_output = simulate_command(command)["output"]
+        assert result == structured_output, (
+            f"run_command({command!r}) must mirror simulate_command output"
+        )
+        assert result.encode("utf-8") == structured_output.encode("utf-8"), (
+            "run_command output must be byte-identical to simulate_command output"
+        )
+
+        expected_legacy = (
+            f"[SIMULATED] Executing: {command}\n"
+            "[SIMULATED] Output placeholder"
+        )
+        assert result == expected_legacy, (
+            f"run_command({command!r}) must produce the exact legacy output string"
+        )
+
+        # Repeat-call determinism.
+        assert run_command(command) == result
+        assert run_command(command) == result
