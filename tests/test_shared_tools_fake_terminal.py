@@ -522,12 +522,15 @@ def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
     """ACCEPT-002 (REQ-0320AB815A): redact_secrets reads zero external state.
 
     Output is derived solely from the ``text`` and ``secrets`` arguments.
-    Environment variables, files, network sockets, and process state are not
-    consulted, so seeding them with a secret must not alter the result.
+    Environment variables, files, network sockets, process state, time, and
+    randomness are not consulted, so seeding them with a secret must not alter
+    the result.
     """
     import builtins
     import os
+    import random
     import socket
+    import time
     import urllib.request
 
     from shared_tools.fake_terminal import redact_secrets
@@ -542,6 +545,7 @@ def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
     canary_path.write_text(canary_secret, encoding="utf-8")
 
     calls = []
+    fail_marker = "REQ-0320AB815A external-state read observed by redact_secrets"
 
     def wrap(original, label):
         def wrapper(*args, **kwargs):
@@ -550,20 +554,43 @@ def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
 
         return wrapper
 
+    def fail_wrap(label, return_value):
+        def wrapper(*args, **kwargs):
+            calls.append(label)
+            return return_value
+
+        return wrapper
+
     monkeypatch.setattr(os, "getenv", wrap(os.getenv, "os.getenv"))
     monkeypatch.setattr(os.environ, "get", wrap(os.environ.get, "os.environ.get"))
+    monkeypatch.setattr(
+        type(os.environ),
+        "__getitem__",
+        fail_wrap(f"{fail_marker}: os.environ.__getitem__", fail_marker),
+    )
+    monkeypatch.setattr(os.environ, "copy", fail_wrap("os.environ.copy", {fail_marker: fail_marker}))
     monkeypatch.setattr(os, "getpid", wrap(os.getpid, "os.getpid"))
+    monkeypatch.setattr(os, "getcwd", fail_wrap("os.getcwd", canary_path / fail_marker))
     monkeypatch.setattr(builtins, "open", wrap(builtins.open, "builtins.open"))
     monkeypatch.setattr(socket, "socket", wrap(socket.socket, "socket.socket"))
     monkeypatch.setattr(
         urllib.request, "urlopen", wrap(urllib.request.urlopen, "urllib.request.urlopen")
     )
+    monkeypatch.setattr(time, "time", fail_wrap("time.time", fail_marker))
+    monkeypatch.setattr(random, "random", fail_wrap("random.random", fail_marker))
 
     result = redact_secrets(text, secrets)
 
     assert result == baseline
+    assert result.encode("utf-8") == baseline.encode("utf-8")
     assert canary_secret not in result
+    assert fail_marker not in result
     assert calls == []
+
+    # Negative control: the class-level os.environ subscript interceptor is
+    # actually armed; an instance-attribute patch would be ignored by CPython.
+    _ = os.environ[fail_marker]
+    assert calls.pop() == f"{fail_marker}: os.environ.__getitem__"
 
 
 def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
