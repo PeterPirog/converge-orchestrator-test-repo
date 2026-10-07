@@ -803,3 +803,42 @@ def test_run_command_str_legacy_output_mirrors_simulate_command_req_0c50be10f3()
         # Repeat-call determinism.
         assert run_command(command) == result
         assert run_command(command) == result
+
+
+def test_accept_003_ci_runs_full_deterministic_suite_req_b7bfa18e79() -> None:
+    """ACCEPT-003 (REQ-B7BFA18E79): the release-gate CI workflow must remain
+    armed for push and pull_request to converge-acceptance, and its pytest
+    step must cover the entire tests/ directory rather than a single hand-picked
+    file.
+    """
+    import pathlib
+    import re
+
+    marker = "REQ-B7BFA18E79 GitHub CI must run the full deterministic pytest suite"
+
+    repo_root = pathlib.Path(__file__).resolve().parents[1]
+    workflow_path = repo_root / ".github/workflows" / "acceptance-ci.yml"
+    assert workflow_path.is_file(), marker
+
+    text = workflow_path.read_text(encoding="utf-8")
+
+    # Separate the trigger block from the jobs block.
+    parts = re.split(r"^jobs:\s*$", text, flags=re.MULTILINE)
+    assert len(parts) >= 2, marker
+    trigger_section = parts[0]
+
+    # Both required event triggers must target converge-acceptance.
+    for event in ("push", "pull_request"):
+        event_pattern = re.compile(
+            rf"^\s*{event}:\s*$"
+            r"(.*?)"
+            rf"^\s*branches:\s*$"
+            r"(.*?)"
+            r"^\s*- converge-acceptance",
+            re.MULTILINE | re.DOTALL,
+        )
+        assert event_pattern.search(trigger_section), marker
+
+    # The pytest step must run the whole tests/ directory, never one file.
+    run_steps = re.findall(r"^\s*- run:\s*(.+)$", text, re.MULTILINE)
+    assert any(step.strip() == "python -m pytest -q tests" for step in run_steps), marker
