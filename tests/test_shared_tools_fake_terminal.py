@@ -32,12 +32,12 @@ def test_run_command_is_deterministic_and_non_executing() -> None:
 
 
 def test_format_output_is_not_exported() -> None:
-    """ACCEPT-003 REQ-280A8C4BB0: format_output must no longer be exported."""
+    """ACCEPT-003 REQ-AB50309F6F: format_output must no longer be exported."""
     import shared_tools.fake_terminal as fake_terminal
 
     public_names = {name for name in dir(fake_terminal) if not name.startswith("_")}
     assert "format_output" not in public_names, (
-        "ACCEPT-003 REQ-280A8C4BB0: format_output must no longer be exported"
+        "ACCEPT-003 REQ-AB50309F6F: format_output must no longer be exported"
     )
 
 
