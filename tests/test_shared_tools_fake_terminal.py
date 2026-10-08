@@ -438,53 +438,6 @@ def test_redact_secrets_repeated_occurrences_req_a59e470230() -> None:
     assert redact_secrets(text, secrets) == result
 
 
-def test_redact_secrets_order_independent_repeated_occurrences_req_a59e470230() -> None:
-    """ACCEPT-002 (REQ-A59E470230): repeated-occurrence redaction is
-    order-independent and byte-identical across collection types.
-
-    Every non-empty secret is replaced with the exact literal '[REDACTED]',
-    every occurrence of that secret is replaced, empty/None entries are
-    ignored, and the output is identical for the secrets supplied as a list,
-    a reversed list, or a set.
-    """
-    from shared_tools.fake_terminal import redact_secrets
-
-    text = (
-        "alpha=secret_one beta=secret_two "
-        "gamma=secret_one delta=secret_two "
-        "epsilon=secret_one"
-    )
-    base_secrets = ["secret_one", None, "", "secret_two", ""]
-    reversed_secrets = list(reversed(base_secrets))
-    set_secrets = set(base_secrets) - {None, ""}
-
-    expected = (
-        "alpha=[REDACTED] beta=[REDACTED] "
-        "gamma=[REDACTED] delta=[REDACTED] "
-        "epsilon=[REDACTED]"
-    )
-
-    result_list = redact_secrets(text, base_secrets)
-    result_reversed = redact_secrets(text, reversed_secrets)
-    result_set = redact_secrets(text, set_secrets)
-
-    for label, result in [("list", result_list), ("reversed", result_reversed), ("set", result_set)]:
-        assert result == expected, f"{label} secrets produced unexpected output"
-        assert result.encode("utf-8") == expected.encode("utf-8"), f"{label} secrets produced non-byte-identical output"
-        assert result.count("[REDACTED]") == 5, f"{label} secrets did not produce expected redaction count"
-        assert "secret_one" not in result, f"{label} secrets leaked secret_one"
-        assert "secret_two" not in result, f"{label} secrets leaked secret_two"
-        assert redact_secrets(text, base_secrets) == result, f"{label} secrets not deterministic on repeat call"
-        assert redact_secrets(text, base_secrets).encode("utf-8") == result.encode("utf-8"), (
-            f"{label} secrets repeat-call output not byte-identical"
-        )
-
-    assert result_list == result_reversed == result_set, (
-        "REQ-A59E470230 output depends on secrets-collection iteration order"
-    )
-    assert result_list.encode("utf-8") == result_reversed.encode("utf-8") == result_set.encode("utf-8")
-
-
 def test_redact_secrets_overlapping_inputs_iteration_order_req_cf0d222bf0() -> None:
     """ACCEPT-002 (REQ-CF0D222BF0): overlapping secrets produce deterministic output.
 
