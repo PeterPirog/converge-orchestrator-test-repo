@@ -24,11 +24,6 @@ def summarize_simulation(simulation: dict) -> dict:
     }
 
 
-def format_output(output: str) -> str:
-    """Format terminal output for display."""
-    return f"```terminal\n{output}\n```"
-
-
 def redact_secrets(text: str, secrets) -> str:
     """Return ``text`` with every non-empty secret value replaced by '[REDACTED]'.
 
