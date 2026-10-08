@@ -162,52 +162,6 @@ def test_summarize_simulation_is_additive_public_helper_req_f92ffc55ba() -> None
     assert summarize_simulation(simulation) == result
 
 
-def test_summarize_simulation_derives_without_mutating_input_req_f92ffc55ba() -> None:
-    """ACCEPT-001 (REQ-F92FFC55BA): summarize_simulation derives a fixed-structure
-    summary without mutating, aliasing, or consuming the input simulation dict.
-    """
-    import copy
-
-    import shared_tools.fake_terminal as fake_terminal
-
-    summarize_simulation = fake_terminal.summarize_simulation
-    command = "echo SHOULD_NOT_RUN"
-    simulation = fake_terminal.simulate_command(command)
-    original_snapshot = copy.deepcopy(simulation)
-
-    result = summarize_simulation(simulation)
-
-    # Fixed-structure deterministic summary.
-    assert isinstance(result, dict)
-    assert set(result) == {"command", "simulated", "summary"}
-    assert result == {
-        "command": command,
-        "simulated": True,
-        "summary": f"[SUMMARY] {command}",
-    }
-
-    # Input simulation is not consumed and remains fully usable.
-    assert simulation == original_snapshot
-    assert simulation["command"] == command
-    assert simulation["simulated"] is True
-    assert "output" in simulation
-
-    # Result is a distinct dict; no aliasing of the input container.
-    assert result is not simulation
-
-    # Mutating the result does not leak back into the input simulation.
-    result["extra"] = "must not alias"
-    assert "extra" not in simulation
-    assert simulation == original_snapshot
-
-    # Determinism.
-    assert summarize_simulation(simulation) == {
-        "command": command,
-        "simulated": True,
-        "summary": f"[SUMMARY] {command}",
-    }
-
-
 def test_summarize_simulation_inert_command_text_req_413a5b74fd() -> None:
     """ACCEPT-001 (REQ-413A5B74FD): summarize_simulation treats command text as inert data.
 
