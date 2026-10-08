@@ -600,13 +600,9 @@ def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
     occurs repeatedly or empty/``None`` secrets are present, the original text
     and every non-empty secret value must never appear on stdout or stderr.
     """
-    import inspect
     from shared_tools.fake_terminal import redact_secrets
 
-    # Exact canary marker, built at runtime so the literal value never enters
-    # the repository. If the helper ever prints, this value is trivial to spot.
-    req_id = inspect.currentframe().f_code.co_name.split("_")[-1].upper()
-    secret = "_".join(["secret", "leak", "probe", req_id]).upper()
+    secret = "hunter2"
     text = f"user=alice pass={secret} token={secret}"
     secrets = [secret, "", None]
 
@@ -614,18 +610,14 @@ def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
 
     expected = "user=alice pass=[REDACTED] token=[REDACTED]"
     assert result == expected
-    assert result.count("[REDACTED]") == 2, "expected two redactions for repeated secret"
 
     captured = capsys.readouterr()
     assert text not in captured.out, "input text leaked to stdout"
-    assert secret not in captured.out, "canary secret value leaked to stdout"
+    assert secret not in captured.out, "secret value leaked to stdout"
     assert text not in captured.err, "input text leaked to stderr"
-    assert secret not in captured.err, "canary secret value leaked to stderr"
+    assert secret not in captured.err, "secret value leaked to stderr"
 
-    # Empty/None entries are exercised above; repeat-call output is byte-identical.
-    repeat = redact_secrets(text, secrets)
-    assert repeat == result
-    assert repeat.encode("utf-8") == result.encode("utf-8")
+    assert redact_secrets(text, secrets) == result
 
 
 def test_no_process_execution_apis_req_879db2129d(tmp_path):
