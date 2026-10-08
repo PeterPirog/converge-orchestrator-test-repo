@@ -537,7 +537,9 @@ def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
     consulted, so seeding them with a secret must not alter the result.
     """
     import builtins
+    import io
     import os
+    import pathlib
     import socket
     import urllib.request
 
@@ -569,6 +571,25 @@ def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         urllib.request, "urlopen", wrap(urllib.request.urlopen, "urllib.request.urlopen")
     )
+    monkeypatch.setattr(
+        type(os.environ), "__getitem__", wrap(type(os.environ).__getitem__, "os.environ.__getitem__")
+    )
+    monkeypatch.setattr(os, "open", wrap(os.open, "os.open"))
+    monkeypatch.setattr(os, "listdir", wrap(os.listdir, "os.listdir"))
+    monkeypatch.setattr(os, "stat", wrap(os.stat, "os.stat"))
+    monkeypatch.setattr(io, "open", wrap(io.open, "io.open"))
+    monkeypatch.setattr(io, "open_code", wrap(io.open_code, "io.open_code"))
+    monkeypatch.setattr(
+        pathlib.Path, "read_text", wrap(pathlib.Path.read_text, "pathlib.Path.read_text")
+    )
+    monkeypatch.setattr(pathlib.Path, "open", wrap(pathlib.Path.open, "pathlib.Path.open"))
+    monkeypatch.setattr(
+        socket, "gethostbyname", wrap(socket.gethostbyname, "socket.gethostbyname")
+    )
+    monkeypatch.setattr(
+        socket, "getaddrinfo", wrap(socket.getaddrinfo, "socket.getaddrinfo")
+    )
+    monkeypatch.setattr(os, "getcwd", wrap(os.getcwd, "os.getcwd"))
 
     result = redact_secrets(text, secrets)
 
