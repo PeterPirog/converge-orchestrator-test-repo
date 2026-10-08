@@ -509,9 +509,24 @@ def test_redact_secrets_overlapping_inputs_iteration_order_req_cf0d222bf0() -> N
     result_reverse = redact_secrets(text, list(reversed(secrets)))
     result_set = redact_secrets(text, set(secrets))
 
+    expected = "start=[REDACTED]def end=xyz"
+    assert result_forward == expected, "forward list produced non-canonical output"
+    assert result_forward.encode("utf-8") == expected.encode("utf-8")
+    assert result_forward.count("[REDACTED]") == 1
+    assert result_reverse == expected, "reversed list produced non-canonical output"
+    assert result_reverse.encode("utf-8") == expected.encode("utf-8")
+    assert result_reverse.count("[REDACTED]") == 1
+    assert result_set == expected, "set produced non-canonical output"
+    assert result_set.encode("utf-8") == expected.encode("utf-8")
+    assert result_set.count("[REDACTED]") == 1
+
+    assert redact_secrets(text, secrets) == result_forward
+    assert redact_secrets(text, list(reversed(secrets))) == result_reverse
+    assert redact_secrets(text, set(secrets)) == result_set
     assert result_forward == result_reverse == result_set, (
         "REQ-CF0D222BF0 overlapping-secret output depends on iteration order"
     )
+    assert result_forward.encode("utf-8") == result_reverse.encode("utf-8") == result_set.encode("utf-8")
 
 
 def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
