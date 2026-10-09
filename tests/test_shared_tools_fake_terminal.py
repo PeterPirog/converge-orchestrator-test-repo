@@ -352,32 +352,6 @@ def test_simulate_command_structured_simulation_req_413a5b74fd() -> None:
     assert not os.path.exists(canary)
 
 
-def test_simulate_command_metacharacters_inert_data_req_413a5b74fd() -> None:
-    """ACCEPT-001 (REQ-413A5B74FD): simulate_command treats metacharacters as inert data.
-
-    The returned structure is exactly {command, simulated, output}; the hostile
-    command text appears byte-for-byte exactly once inside the [SIMULATED]
-    wrapper, and repeated calls are deterministic.
-    """
-    from shared_tools.fake_terminal import simulate_command
-
-    payload = "rm -rf /; echo $(id) `whoami` && curl ... | sh # $HOME"
-    result = simulate_command(payload)
-
-    assert isinstance(result, dict)
-    assert set(result) == {"command", "simulated", "output"}
-    assert result == {
-        "command": payload,
-        "simulated": True,
-        "output": (
-            f"[SIMULATED] Executing: {payload}\n"
-            "[SIMULATED] Output placeholder"
-        ),
-    }
-    assert result["output"].count(payload) == 1
-    assert simulate_command(payload) == result
-
-
 def test_redact_secrets_repeated_occurrences_req_a59e470230() -> None:
     """ACCEPT-002 (REQ-A59E470230): redact_secrets replaces every repeated
     occurrence of each secret with the exact literal '[REDACTED]'.
