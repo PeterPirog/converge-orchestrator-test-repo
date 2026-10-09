@@ -317,6 +317,38 @@ def test_redact_secrets_non_empty_occurrences_req_85c52948b7() -> None:
     assert redact_secrets(text, secrets) == result
 
 
+def test_redact_secrets_duplicate_and_empty_collections_req_85c52948b7() -> None:
+    """ACCEPT-002 (REQ-85C52948B7): duplicate secret values and empty collections are deterministic.
+
+    When the same non-empty secret appears multiple times in ``secrets``, every
+    occurrence in ``text`` is redacted once and repeated calls return
+    byte-identical output.  Collections containing only empty strings, ``None``,
+    or nothing at all leave the text unchanged and are also deterministic.
+    """
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = "user=alice pass=hunter2 token=hunter2"
+    duplicate_secrets = ["hunter2", "hunter2", "hunter2"]
+    result = redact_secrets(text, duplicate_secrets)
+
+    expected = "user=alice pass=[REDACTED] token=[REDACTED]"
+    assert result == expected
+    assert result.encode("utf-8") == expected.encode("utf-8")
+    assert result.count("[REDACTED]") == 2
+    assert "hunter2" not in result
+
+    # Repeat-call determinism with duplicate secret values.
+    assert redact_secrets(text, duplicate_secrets) == result
+    assert redact_secrets(text, duplicate_secrets).encode("utf-8") == result.encode("utf-8")
+
+    # Empty collections leave text unchanged, deterministically.
+    for empty_secrets in ([], ["", None], [None, ""]):
+        unchanged = redact_secrets(text, empty_secrets)
+        assert unchanged == text
+        assert unchanged.encode("utf-8") == text.encode("utf-8")
+        assert redact_secrets(text, empty_secrets) == unchanged
+
+
 def test_simulate_command_structured_simulation_req_413a5b74fd() -> None:
     """ACCEPT-001 (REQ-413A5B74FD): command text is inert data in simulate_command."""
     import os
