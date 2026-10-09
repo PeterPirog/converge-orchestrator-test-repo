@@ -603,6 +603,51 @@ def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
     assert redact_secrets(text, secrets) == result
 
 
+def test_redact_secrets_no_logging_multiple_repeated_and_empty_values_req_5c3f7ab352(
+    capsys, caplog
+) -> None:
+    """ACCEPT-002 (REQ-5C3F7AB352): redact_secrets never prints or logs input text or secret values.
+
+    Two distinct secrets, each repeated twice, plus empty-string and ``None``
+    entries, are redacted across list/reversed-list/tuple/set shapes. No input
+    text or secret value appears on stdout, stderr, or in caplog records, and
+    repeated calls are byte-identical UTF-8.
+    """
+    import logging
+    from shared_tools.fake_terminal import redact_secrets
+
+    caplog.set_level(logging.DEBUG)
+
+    secret_a = "ALPHA_SECRET_5C3F7AB352"
+    secret_b = "BETA_SECRET_5C3F7AB352"
+    text = f"first={secret_a} second={secret_b} third={secret_a} fourth={secret_b}"
+    secrets = [secret_a, "", None, secret_b, secret_a, secret_b]
+
+    result = redact_secrets(text, secrets)
+    expected = "first=[REDACTED] second=[REDACTED] third=[REDACTED] fourth=[REDACTED]"
+    assert result == expected
+    assert result.count("[REDACTED]") == 4
+
+    captured = capsys.readouterr()
+    leak_message = "REQ-5C3F7AB352 no-logging audit failed: input text or secret value emitted to stdout, stderr, or captured logging records"
+    for sink in (captured.out, captured.err, caplog.text):
+        assert text not in sink, leak_message
+        assert secret_a not in sink, leak_message
+        assert secret_b not in sink, leak_message
+
+    # Collection-order invariance with empty/None entries.
+    for variant in (list(reversed(secrets)), tuple(secrets), set(secret for secret in secrets if secret)):
+        variant_result = redact_secrets(text, variant)
+        assert variant_result == result, "REQ-5C3F7AB352 redaction output depends on collection iteration order"
+        assert variant_result.encode("utf-8") == result.encode("utf-8"), "REQ-5C3F7AB352 redaction output is not byte-identical UTF-8 across variants"
+        assert variant_result.count("[REDACTED]") == 4
+
+    # Repeat-call determinism (UTF-8 byte-identical).
+    repeat = redact_secrets(text, secrets)
+    assert repeat == result
+    assert repeat.encode("utf-8") == result.encode("utf-8")
+
+
 def test_no_process_execution_apis_req_879db2129d(tmp_path):
     """REQ-879DB2129D: shared_tools modules contain no process-execution APIs.
 
