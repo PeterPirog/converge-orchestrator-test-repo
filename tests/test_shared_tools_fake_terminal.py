@@ -162,33 +162,6 @@ def test_summarize_simulation_is_additive_public_helper_req_f92ffc55ba() -> None
     assert summarize_simulation(simulation) == result
 
 
-def test_summarize_simulation_derives_without_mutating_input_req_f92ffc55ba() -> None:
-    """ACCEPT-001 (REQ-F92FFC55BA): summarize_simulation derives a fixed-structure
-    summary without mutating the input simulation dict.
-
-    A deep-copy snapshot is taken before the call; the input dict must compare
-    equal to that snapshot after the call, and the returned summary must match
-    the deterministic {command, simulated, summary} structure.
-    """
-    import copy
-    import shared_tools.fake_terminal as fake_terminal
-
-    command = "echo SHOULD_NOT_RUN"
-    simulation = fake_terminal.simulate_command(command)
-    before = copy.deepcopy(simulation)
-
-    result = fake_terminal.summarize_simulation(simulation)
-
-    assert simulation == before, "REQ-F92FFC55BA summarize_simulation mutated input simulation"
-    assert isinstance(result, dict)
-    assert result == {
-        "command": command,
-        "simulated": True,
-        "summary": f"[SUMMARY] {command}",
-    }
-    assert fake_terminal.summarize_simulation(simulation) == result
-
-
 def test_summarize_simulation_inert_command_text_req_413a5b74fd() -> None:
     """ACCEPT-001 (REQ-413A5B74FD): summarize_simulation treats command text as inert data.
 
