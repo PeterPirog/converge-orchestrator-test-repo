@@ -110,6 +110,31 @@ def test_run_command_deterministic_inert_output_req_0c50be10f3() -> None:
     assert run_command(payload) == payload_result
 
 
+def test_run_command_signature_preserved_req_0c50be10f3() -> None:
+    """ACCEPT-001 (REQ-0C50BE10F3): run_command public surface is exactly (command: str) -> str.
+
+    The function exposes a single parameter named ``command`` annotated ``str``
+    with no default, is annotated to return ``str``, and its output equals
+    ``simulate_command(command)['output']`` byte-for-byte.
+    """
+    import inspect
+
+    from shared_tools.fake_terminal import run_command, simulate_command
+
+    sig = inspect.signature(run_command)
+    params = list(sig.parameters.values())
+
+    assert len(params) == 1, "run_command must expose exactly one parameter"
+    param = params[0]
+    assert param.name == "command", f"unexpected parameter name: {param.name}"
+    assert param.annotation is str, "command parameter must be annotated str"
+    assert param.default is inspect.Parameter.empty, "command parameter must have no default"
+    assert sig.return_annotation is str, "run_command must return str"
+
+    command = "ls -la"
+    assert run_command(command) == simulate_command(command)["output"]
+
+
 def test_summarize_simulation_req_f92ffc55ba() -> None:
     """ACCEPT-001 (REQ-F92FFC55BA): summarize_simulation derives a deterministic,
     fixed-structure summary from a simulate_command result.
