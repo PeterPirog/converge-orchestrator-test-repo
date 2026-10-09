@@ -162,6 +162,29 @@ def test_summarize_simulation_is_additive_public_helper_req_f92ffc55ba() -> None
     assert summarize_simulation(simulation) == result
 
 
+def test_summarize_simulation_derives_without_mutating_input_req_f92ffc55ba() -> None:
+    """ACCEPT-001 (REQ-F92FFC55BA): summarize_simulation derives its summary without
+    mutating the input simulate_command result.
+    """
+    import shared_tools.fake_terminal as fake_terminal
+
+    command = "echo SHOULD_NOT_RUN"
+    simulation = fake_terminal.simulate_command(command)
+    before = simulation.copy()
+
+    result = fake_terminal.summarize_simulation(simulation)
+
+    assert simulation == before, "summarize_simulation mutated the input simulation"
+    assert isinstance(result, dict)
+    assert set(result) == {"command", "simulated", "summary"}
+    assert result == {
+        "command": command,
+        "simulated": True,
+        "summary": f"[SUMMARY] {command}",
+    }
+    assert fake_terminal.summarize_simulation(simulation) == result
+
+
 def test_summarize_simulation_inert_command_text_req_413a5b74fd() -> None:
     """ACCEPT-001 (REQ-413A5B74FD): summarize_simulation treats command text as inert data.
 
