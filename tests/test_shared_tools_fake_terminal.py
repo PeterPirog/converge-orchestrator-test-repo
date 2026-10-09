@@ -532,3 +532,28 @@ def test_no_process_execution_apis_req_879db2129d(tmp_path):
     assert result == expected, "REQ-879DB2129D shell payload must produce deterministic wrapper output"
     assert not canary.exists(), "REQ-879DB2129D canary file must not be created"
     assert simulate_command(payload) == result, "REQ-879DB2129D simulate_command must be deterministic"
+
+
+def test_simulate_command_inert_metacharacters_exact_structure_req_413a5b74fd() -> None:
+    """ACCEPT-001 (REQ-413A5B74FD): simulate_command treats metacharacter command text as inert data.
+
+    The returned structure is exactly {command, simulated, output}; the command
+    string appears byte-identically only inside the [SIMULATED] Executing: wrapper,
+    and repeated calls are deterministic.
+    """
+    from shared_tools.fake_terminal import simulate_command
+
+    payload = "echo $(id) `whoami` | cat ; rm -rf /"
+    result = simulate_command(payload)
+
+    assert isinstance(result, dict)
+    assert result == {
+        "command": payload,
+        "simulated": True,
+        "output": (
+            f"[SIMULATED] Executing: {payload}\n"
+            "[SIMULATED] Output placeholder"
+        ),
+    }
+    assert set(result) == {"command", "simulated", "output"}
+    assert simulate_command(payload) == result
