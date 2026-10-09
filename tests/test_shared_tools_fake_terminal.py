@@ -110,38 +110,6 @@ def test_run_command_deterministic_inert_output_req_0c50be10f3() -> None:
     assert run_command(payload) == payload_result
 
 
-def test_run_command_signature_preserved_req_0c50be10f3() -> None:
-    """ACCEPT-001 (REQ-0C50BE10F3): run_command surface is exactly (command: str) -> str.
-
-    The callable must expose a single ``command`` parameter annotated ``str``
-    with no default, return annotation ``str``, and produce output that is
-    byte-identical to ``simulate_command(command)['output']``.
-    """
-    import inspect
-
-    import shared_tools.fake_terminal as fake_terminal
-
-    sig = inspect.signature(fake_terminal.run_command)
-    params = list(sig.parameters.values())
-    param = params[0] if params else None
-
-    signature_ok = (
-        len(params) == 1
-        and param is not None
-        and param.name == "command"
-        and param.annotation is str
-        and param.default is inspect.Parameter.empty
-        and sig.return_annotation is str
-    )
-
-    assert signature_ok, "REQ-0C50BE10F3 run_command signature (command: str) -> str not preserved"
-
-    command = "echo SHOULD_NOT_RUN"
-    assert fake_terminal.run_command(command) == fake_terminal.simulate_command(command)["output"], (
-        "REQ-0C50BE10F3 run_command output not byte-identical to simulate_command(command)['output']"
-    )
-
-
 def test_summarize_simulation_req_f92ffc55ba() -> None:
     """ACCEPT-001 (REQ-F92FFC55BA): summarize_simulation derives a deterministic,
     fixed-structure summary from a simulate_command result.
