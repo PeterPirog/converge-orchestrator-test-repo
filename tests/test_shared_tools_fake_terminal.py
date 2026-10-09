@@ -417,20 +417,57 @@ def test_redact_secrets_overlapping_inputs_iteration_order_req_cf0d222bf0() -> N
     """ACCEPT-002 (REQ-CF0D222BF0): overlapping secrets produce deterministic output.
 
     The same overlapping secret contents, passed as an ordered list, a reversed
-    list, or a set, must redact to identical output regardless of the iteration
-    order of the collection.
+    list, a tuple, or a set, must redact to byte-identical output regardless of
+    the iteration order of the collection. Two-secret and three-secret overlaps
+    are both covered, and repeated calls remain deterministic.
     """
     from shared_tools.fake_terminal import redact_secrets
 
+    # Two-secret overlap
     text = "start=abcdef end=xyz"
     secrets = ["abc", "bcd"]
 
-    result_forward = redact_secrets(text, secrets)
-    result_reverse = redact_secrets(text, list(reversed(secrets)))
-    result_set = redact_secrets(text, set(secrets))
+    forward = redact_secrets(text, secrets)
+    variants = (
+        redact_secrets(text, list(reversed(secrets))),
+        redact_secrets(text, tuple(secrets)),
+        redact_secrets(text, set(secrets)),
+    )
+    for variant_result in variants:
+        assert variant_result == forward, (
+            "REQ-CF0D222BF0 overlapping-secret output depends on iteration order"
+        )
+        assert variant_result.encode("utf-8") == forward.encode("utf-8"), (
+            "REQ-CF0D222BF0 overlapping-secret output is not byte-identical UTF-8"
+        )
 
-    assert result_forward == result_reverse == result_set, (
-        "REQ-CF0D222BF0 overlapping-secret output depends on iteration order"
+    # Repeat-call determinism for the two-secret overlap.
+    assert redact_secrets(text, secrets) == forward
+    assert redact_secrets(text, secrets).encode("utf-8") == forward.encode("utf-8")
+
+    # Three-secret overlap
+    text_three = "start=abcdefgh end=xyz"
+    secrets_three = ["abc", "bcd", "cde"]
+
+    forward_three = redact_secrets(text_three, secrets_three)
+    variants_three = (
+        redact_secrets(text_three, list(reversed(secrets_three))),
+        redact_secrets(text_three, tuple(secrets_three)),
+        redact_secrets(text_three, set(secrets_three)),
+    )
+    for variant_result in variants_three:
+        assert variant_result == forward_three, (
+            "REQ-CF0D222BF0 three-secret overlapping output depends on iteration order"
+        )
+        assert variant_result.encode("utf-8") == forward_three.encode("utf-8"), (
+            "REQ-CF0D222BF0 three-secret overlapping output is not byte-identical UTF-8"
+        )
+
+    # Repeat-call determinism for the three-secret overlap.
+    assert redact_secrets(text_three, secrets_three) == forward_three
+    assert (
+        redact_secrets(text_three, secrets_three).encode("utf-8")
+        == forward_three.encode("utf-8")
     )
 
 
