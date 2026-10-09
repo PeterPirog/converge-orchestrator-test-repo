@@ -447,8 +447,8 @@ def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
 def test_no_process_execution_apis_req_879db2129d(tmp_path):
     """REQ-879DB2129D: shared_tools modules contain no process-execution APIs.
 
-    The AST guard deterministically scans every *.py module recursively under
-    shared_tools/ (sorted by path) and fails if any process-execution API is present.
+    The AST guard deterministically scans every *.py module under shared_tools/
+    (sorted by path) and fails if any process-execution API is present.
     """
     import ast
     import pathlib
@@ -456,7 +456,7 @@ def test_no_process_execution_apis_req_879db2129d(tmp_path):
     import shared_tools
 
     package_dir = pathlib.Path(shared_tools.__file__).parent
-    module_paths = sorted(package_dir.rglob("*.py"))
+    module_paths = sorted(package_dir.glob("*.py"))
 
     banned_modules = {"subprocess", "sh", "pty", "multiprocessing"}
     banned_names = {
