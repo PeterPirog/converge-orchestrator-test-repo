@@ -519,6 +519,63 @@ def test_redact_secrets_io_purity_req_0320ab815a(monkeypatch, tmp_path) -> None:
     assert calls == []
 
 
+def test_redact_secrets_io_purity_environ_getitem_random_time_req_0320ab815a(
+    monkeypatch, tmp_path
+) -> None:
+    """ACCEPT-002 (REQ-0320AB815A): redact_secrets is I/O-pure even when
+    os.environ.__getitem__, random.* and time.* are instrumented.
+    """
+    import builtins
+    import os
+    import random
+    import socket
+    import time
+    import urllib.request
+
+    from shared_tools.fake_terminal import redact_secrets
+
+    text = "user=alice pass=hunter2"
+    secrets = ["hunter2"]
+    baseline = redact_secrets(text, secrets)
+    expected_bytes = baseline.encode("utf-8")
+
+    canary = "CANARY_0320AB815A"
+    monkeypatch.setenv("REDACT_CANARY_0320AB815A", canary)
+    (tmp_path / "secrets.txt").write_text(canary, encoding="utf-8")
+
+    calls = []
+
+    def wrap(original, label):
+        def wrapper(*args, **kwargs):
+            calls.append(label)
+            return original(*args, **kwargs)
+        return wrapper
+
+    monkeypatch.setattr(os, "getenv", wrap(os.getenv, "os.getenv"))
+    monkeypatch.setattr(os.environ, "get", wrap(os.environ.get, "os.environ.get"))
+    monkeypatch.setattr(os.environ, "__getitem__", wrap(os.environ.__getitem__, "os.environ.__getitem__"))
+    monkeypatch.setattr(os, "getpid", wrap(os.getpid, "os.getpid"))
+    monkeypatch.setattr(builtins, "open", wrap(builtins.open, "builtins.open"))
+    monkeypatch.setattr(socket, "socket", wrap(socket.socket, "socket.socket"))
+    monkeypatch.setattr(urllib.request, "urlopen", wrap(urllib.request.urlopen, "urllib.request.urlopen"))
+
+    for module, names in (
+        (random, ("random", "randint", "randrange", "choice", "shuffle", "sample", "getrandbits", "seed", "uniform")),
+        (time, ("time", "monotonic", "perf_counter", "process_time", "strftime", "gmtime", "localtime")),
+    ):
+        for name in names:
+            attr = getattr(module, name, None)
+            if callable(attr):
+                monkeypatch.setattr(module, name, wrap(attr, f"{module.__name__}.{name}"))
+
+    result = redact_secrets(text, secrets)
+
+    assert result == baseline
+    assert result.encode("utf-8") == expected_bytes
+    assert canary not in result
+    assert calls == []
+
+
 def test_redact_secrets_no_stdout_stderr_logging_req_5c3f7ab352(capsys) -> None:
     """ACCEPT-002 (REQ-5C3F7AB352): redact_secrets never logs input text or secret values.
 
