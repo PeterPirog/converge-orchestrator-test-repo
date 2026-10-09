@@ -400,6 +400,18 @@ def test_redact_secrets_repeated_occurrences_req_a59e470230() -> None:
     assert "secret_two" not in result
     assert redact_secrets(text, secrets) == result
 
+    # Collection-order invariance: reversed list, tuple, set, and
+    # empty-filtered collections redact to byte-identical output.
+    for variant in (
+        list(reversed(secrets)),
+        tuple(secrets),
+        set(secret for secret in secrets if secret),
+        [secret for secret in secrets if secret],
+    ):
+        variant_result = redact_secrets(text, variant)
+        assert variant_result == result
+        assert variant_result.encode("utf-8") == result.encode("utf-8")
+
 
 def test_redact_secrets_overlapping_inputs_iteration_order_req_cf0d222bf0() -> None:
     """ACCEPT-002 (REQ-CF0D222BF0): overlapping secrets produce deterministic output.
