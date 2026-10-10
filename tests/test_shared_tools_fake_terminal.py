@@ -754,3 +754,43 @@ def test_simulate_command_inert_metacharacters_exact_structure_req_413a5b74fd() 
     }
     assert set(result) == {"command", "simulated", "output"}
     assert simulate_command(payload) == result
+
+
+def test_accept003_compatibility_exception_waives_no_gates_req_b7bfa18e79() -> None:
+    """ACCEPT-003 (REQ-B7BFA18E79): the deliberate compatibility exception for the
+    release-gate HITL proof is bounded and does not waive the release gates.
+    """
+    import pathlib
+
+    repo_root = pathlib.Path(__file__).resolve().parents[1]
+    doc_path = repo_root / "ACCEPTANCE_TARGET.md"
+    workflow_path = repo_root / ".github" / "workflows" / "acceptance-ci.yml"
+
+    assert doc_path.exists(), "ACCEPTANCE_TARGET.md is missing"
+    assert workflow_path.exists(), "acceptance-ci.yml is missing"
+
+    doc = doc_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+    required_doc_phrases = (
+        "REQ-B7BFA18E79",
+        "must not waive",
+        "deterministic tests",
+        "independent correctness/architecture/security review",
+        "GitHub CI",
+    )
+    for phrase in required_doc_phrases:
+        assert phrase in doc, (
+            f"ACCEPT-003 REQ-B7BFA18E79 compatibility exception must not waive the release gates; "
+            f"missing doc phrase: {phrase!r}"
+        )
+
+    workflow = workflow_path.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+    assert "pull_request:" in workflow, "acceptance-ci.yml missing pull_request trigger"
+    assert "push:" in workflow, "acceptance-ci.yml missing push trigger"
+    assert workflow.count("- converge-acceptance") >= 2, (
+        "acceptance-ci.yml must trigger on converge-acceptance for both push and pull_request"
+    )
+    assert "python -m pytest -q tests/test_shared_tools_fake_terminal.py" in workflow, (
+        "acceptance-ci.yml must invoke the pinned pytest gate for tests/test_shared_tools_fake_terminal.py"
+    )
