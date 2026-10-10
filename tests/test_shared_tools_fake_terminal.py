@@ -1,4 +1,4 @@
-from shared_tools.fake_terminal import format_output, run_command
+from shared_tools.fake_terminal import run_command
 
 
 def test_simulate_command_returns_deterministic_structured_output() -> None:
@@ -31,8 +31,22 @@ def test_run_command_is_deterministic_and_non_executing() -> None:
     )
 
 
-def test_format_output_wraps_terminal_fence() -> None:
-    assert format_output("line one\nline two") == "```terminal\nline one\nline two\n```"
+def test_format_output_no_longer_exported_req_280a8c4bb0() -> None:
+    """ACCEPT-003 (REQ-280A8C4BB0): format_output is absent from shared_tools.fake_terminal."""
+    import shared_tools.fake_terminal as fake_terminal
+
+    assert "format_output" not in dir(fake_terminal), (
+        "REQ-280A8C4BB0 old symbol format_output still exported by shared_tools.fake_terminal"
+    )
+
+    try:
+        from shared_tools.fake_terminal import format_output
+    except ImportError:
+        pass
+    else:
+        raise AssertionError(
+            "REQ-280A8C4BB0 old symbol format_output still exported by shared_tools.fake_terminal"
+        )
 
 
 def test_simulate_command_structured_simulation_req_0c50be10f3() -> None:
@@ -168,7 +182,7 @@ def test_summarize_simulation_is_additive_public_helper_req_f92ffc55ba() -> None
     assert summarize_simulation is not None, "REQ-F92FFC55BA summary helper missing"
 
     # Additive: existing public helpers remain present.
-    public_helpers = {"run_command", "simulate_command", "format_output", "redact_secrets"}
+    public_helpers = {"run_command", "simulate_command", "redact_secrets"}
     assert public_helpers.issubset(set(dir(fake_terminal))), (
         "REQ-F92FFC55BA summarize_simulation is not additive"
     )
