@@ -32,11 +32,11 @@ def test_run_command_is_deterministic_and_non_executing() -> None:
 
 
 def test_format_output_no_longer_exported_req_280a8c4bb0() -> None:
-    """ACCEPT-003 (REQ-280A8C4BB0): format_output is absent from shared_tools.fake_terminal."""
+    """ACCEPT-003 (REQ-AB50309F6F): format_output is absent from shared_tools.fake_terminal."""
     import shared_tools.fake_terminal as fake_terminal
 
     assert "format_output" not in dir(fake_terminal), (
-        "REQ-280A8C4BB0 old symbol format_output still exported by shared_tools.fake_terminal"
+        "ACCEPT-003 REQ-AB50309F6F: old symbol format_output still exported by shared_tools.fake_terminal"
     )
 
     try:
@@ -45,7 +45,7 @@ def test_format_output_no_longer_exported_req_280a8c4bb0() -> None:
         pass
     else:
         raise AssertionError(
-            "REQ-280A8C4BB0 old symbol format_output still exported by shared_tools.fake_terminal"
+            "ACCEPT-003 REQ-AB50309F6F: old symbol format_output still exported by shared_tools.fake_terminal"
         )
 
 
